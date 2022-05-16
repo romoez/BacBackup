@@ -1,0 +1,15 @@
+.vscode/
+
+Installer/
+!AideBacBackup
+AideBacBackup/*
+!AideBacBackup/AideBB.chm
+
+*_stripped.au3
+*.exe
+*.7z
+*.zip
+
+Tests/
+__dev.txt
+todo.txt
