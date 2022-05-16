@@ -6,7 +6,7 @@
 
 ## Principales fonctionnalités
 - Surveillance de l'activité sur le PC par des captures d'écran.
-- Sauvegarde périodique de toute modification apportée aux [dossiers de travail](#liste-de-dossiers-surveill-s-par-bacbackup-) des élèves.
+- Sauvegarde périodique de toute modification apportée aux [dossiers de travail](#liste-de-dossiers-surveillés-par-bacbackup) des élèves.
 
 ![Interface Bacbackup: Dossiers Surveillés](https://github.com/romoez/BacBackup/blob/main/captures_ecran/bb_interface_liste_de_dodssiers_surveilles.png)
 
@@ -15,8 +15,7 @@
 - Il crée un dossier de sauvegarde à chaque démarrage de Windows, le nom de dossier est composé d'un numéro (auto-incrémenté), la date et l'heure de création :
 ![Un dossier de sauvegarde pour chaque session](https://github.com/romoez/BacBackup/blob/main/captures_ecran/dossier_de_sauvegarde_par_session.png)
 
-- Dans le dossier de sauvegarde de la session encours, BacBackup crée un sous dossier pour y mettre les captures d'écran, et crée des copies compressées des dossiers de travail ayant subi des modifications, on peut y avoir plusieurs versions pour même dossier de travail.
-
+- Dans le dossier de sauvegarde de la session encours, BacBackup crée un sous dossier pour y mettre les captures d'écran, et crée des copies compressées des dossiers de travail ayant subi des modifications, on peut y avoir plusieurs versions pour même dossier de travail:
 ![Exemple de contenu d'un dossier de sauvegarde d'une session](https://github.com/romoez/BacBackup/blob/main/captures_ecran/exemple_contenu_d_un_dossier_de_sauvegarde.png)
 
 
