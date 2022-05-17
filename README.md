@@ -16,7 +16,7 @@
 
 ![Un dossier de sauvegarde pour chaque session](https://github.com/romoez/BacBackup/blob/main/captures_ecran/dossier_de_sauvegarde_par_session.png)
 
-- Dans le dossier de sauvegarde de la session encours, BacBackup crée un sous dossier pour y mettre les captures d'écran, et crée des copies compressées des dossiers de travail ayant subi des modifications, on peut y avoir plusieurs versions pour même dossier de travail:
+- Dans le dossier de sauvegarde de la session encours, BacBackup crée un sous dossier pour y mettre les captures d'écran, et crée des copies compressées des dossiers de travail ayant subi des modifications, on peut y avoir plusieurs versions pour un même dossier de travail:
 
 ![Exemple de contenu d'un dossier de sauvegarde d'une session](https://github.com/romoez/BacBackup/blob/main/captures_ecran/exemple_contenu_d_un_dossier_de_sauvegarde.png)
 
@@ -28,13 +28,13 @@
 ## Autres informations
 
 - **Shift + Ctrl + Win + F6**: Ouvre l'interface de BacBackup.
-- **Shift + Ctrl + Win + F5**: Force BacBackup à prendre une sauvegarde s'il est nécessaire et en cas de besoin.
-- L'intervalle de captures d'écrant est de 5 secondes *(s'il y a une activité de la souris ou du clavier)*.
-- L'intervalle de sauvegardes des dossiers de travil est de 2 minutes *(s'il y a des modifications)*.
+- **Shift + Ctrl + Win + F5**: Force BacBackup à prendre une sauvegarde à l'instant s'il est nécessaire.
+- L'intervalle de captures d'écran est de 5 secondes *(s'il y a une activité de la souris ou du clavier)*.
+- L'intervalle de sauvegardes des dossiers de travail est de 2 minutes *(s'il y a des modifications)*.
 - L'installateur de BacBackup, ne crée aucun raccourci, ni au menu démarrer, ni sur le bureau (utilisez le raccourcis clavier pour y accéder **Shift + Ctrl + Win + F6**).
-- Les opérations faite par BacBackup, sont transparents à l'utilisateur, et n'affectent pas les performances du PC.
-- Le dossier de Sauvegarede de BacBackup est verrouillé, et il n'est accessible qu'à partir de l'interface du logiciel en appuyant sur le lien en bas de la fenêtre.
-- Le dossier de Sauvegarede de BacBackup est le même dossier utilisé par [BacCollector](https://github.com/romoez/BacCollector)
+- Les opérations faites par BacBackup, sont transparents à l'utilisateur, et n'affectent pas les performances du PC.
+- Le dossier de Sauvegarde de BacBackup est verrouillé, et il n'est accessible qu'à partir de l'interface du logiciel en appuyant sur le lien en bas de la fenêtre.
+- Le dossier de Sauvegarde de BacBackup est le même dossier utilisé par [BacCollector](https://github.com/romoez/BacCollector)
 - Si le nombre de dossiers de sessions atteint le nombre maximum *(750 par défaut)*, ou la taille du dossier dépasse la taille maximale autorisé *(200Go par défaut)*, BacBackup efface 50% des dossiers de sauvegarde en commençant par les plus anciens.
 
 ## Liste de dossiers surveillés par BacBackup:
