@@ -13,7 +13,7 @@
 
 #pragma compile(LegalCopyright, © La Communauté Tunisienne des Enseignants d'Informatique)
 #pragma compile(Comments,'BacBackup - Module du Premier Démarrage')
-#pragma compile(Out, BacBackup_PremierDemarrage.exe)
+#pragma compile(Out, Installer\Files\BacBackup_PremierDemarrage.exe)
 #pragma compile(CompanyName, La Communauté Tunisienne des Enseignants d'Informatique)
 #NoTrayIcon
 

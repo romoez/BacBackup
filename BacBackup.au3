@@ -13,7 +13,7 @@
 
 #pragma compile(LegalCopyright, © La Communauté Tunisienne des Enseignants d'Informatique)
 #pragma compile(Comments,'BacBackup - Module de Surveillance')
-#pragma compile(Out, BacBackup.exe)
+#pragma compile(Out, Installer\Files\BacBackup.exe)
 #pragma compile(CompanyName, La Communauté Tunisienne des Enseignants d'Informatique)
 
 #include <ScreenCapture.au3>

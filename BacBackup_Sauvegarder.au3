@@ -13,7 +13,7 @@
 
 #pragma compile(LegalCopyright, 2016-2022 © La Communauté Tunisienne des Enseignants d'Informatique)
 #pragma compile(Comments,'BacBackup - Module de Sauvegarde')
-#pragma compile(Out, BacBackup_Sauvegarder.exe)
+#pragma compile(Out, Installer\Files\BacBackup_Sauvegarder.exe)
 #pragma compile(CompanyName, La Communauté Tunisienne des Enseignants d'Informatique)
 
 #NoTrayIcon

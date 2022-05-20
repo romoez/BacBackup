@@ -13,7 +13,7 @@
 
 #pragma compile(LegalCopyright, © La Communauté Tunisienne des Enseignants d'Informatique)
 #pragma compile(Comments,'BacBackup - Fenêtre principale')
-#pragma compile(Out, BacBackup_Interface.exe)
+#pragma compile(Out, Installer\Files\BacBackup_Interface.exe)
 #pragma compile(CompanyName, La Communauté Tunisienne des Enseignants d'Informatique)
 
 #NoTrayIcon
