@@ -7,9 +7,9 @@
 
 #pragma compile(Icon, BacBackup.ico)
 #pragma compile(FileDescription, BacBackup Auto-Sauvegarde)
-#pragma compile(FileVersion, 2.2.3.516, 2.2.3.516) ; Le dernier paramètre est optionnel
+#pragma compile(FileVersion, 2.2.5.520, 2.2.5.520) ; Le dernier paramètre est optionnel
 #pragma compile(ProductName, BacBackup)
-#pragma compile(ProductVersion, 2.2.3.516)
+#pragma compile(ProductVersion, 2.2.5.520)
 
 #pragma compile(LegalCopyright, 2016-2022 © La Communauté Tunisienne des Enseignants d'Informatique)
 #pragma compile(Comments,'BacBackup - Module de Sauvegarde')
@@ -209,12 +209,15 @@ Func Sauvegarder()
 	EndIf
 ;~ -----------
 	$Kes = VerifEasyPHPdata()
-	If $Kes[0] > 0 Then
-		For $x = 1 To $Kes[0]
+;~ 	If $Kes[0] > 0 Then
+;~ 		For $x = 1 To $Kes[0]
+	If IsArray($Kes) And $Kes[0] > 0 Then
+		For $x = 1 To UBound($Kes)-1
 			$DossierSrc = _FineDataPath($Kes[$x])
 			$DossierBK = $DossierSrc ;& "____" & $Num & '___' & @HOUR & "h" & @MIN
 			$CheminBK = $Lecteur & $DossierSauvegardes & '\Tmp\' & $DossierBK ;Dossier "X:\sauvegardes\Tmp\..."
 			$ListeDossiersDansData = _FileListToArrayRec($Kes[$x], "*||phpmyadmin;mysql;performance_schema", 2, 0, 2, 0) ;Liste de Dossiers
+			If @error or Not IsArray($ListeDossiersDansData) Then ContinueLoop
 			_ArrayDelete($ListeDossiersDansData, _ArraySearch($ListeDossiersDansData, "phpmyadmin"))
 			_ArrayDelete($ListeDossiersDansData, _ArraySearch($ListeDossiersDansData, "mysql"))
 			_ArrayDelete($ListeDossiersDansData, _ArraySearch($ListeDossiersDansData, "performance_schema"))
