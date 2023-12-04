@@ -7,11 +7,11 @@
 
 #pragma compile(Icon, BacBackup.ico)
 #pragma compile(FileDescription, BacBackup Auto-Sauvegarde)
-#pragma compile(FileVersion, 2.2.5.520, 2.2.5.520) ; Le dernier paramètre est optionnel
+#pragma compile(FileVersion, 2.2.6.1204, 2.2.6.1204) ; Le dernier paramètre est optionnel
 #pragma compile(ProductName, BacBackup)
-#pragma compile(ProductVersion, 2.2.5.520)
+#pragma compile(ProductVersion, 2.2.6.1204)
 
-#pragma compile(LegalCopyright, © La Communauté Tunisienne des Enseignants d'Informatique)
+#pragma compile(LegalCopyright, 2016-2023 © La Communauté Tunisienne des Enseignants d'Informatique)
 #pragma compile(Comments,'BacBackup - Module du Premier Démarrage')
 #pragma compile(Out, Installer\Files\BacBackup_PremierDemarrage.exe)
 #pragma compile(CompanyName, La Communauté Tunisienne des Enseignants d'Informatique)
