@@ -7,11 +7,11 @@
 
 #pragma compile(Icon, BacBackup.ico)
 #pragma compile(FileDescription, BacBackup Auto-Sauvegarde)
-#pragma compile(FileVersion, 2.2.5.520, 2.2.5.520) ; Le dernier paramètre est optionnel
+#pragma compile(FileVersion, 2.2.6.1204, 2.2.6.1204) ; Le dernier paramètre est optionnel
 #pragma compile(ProductName, BacBackup)
-#pragma compile(ProductVersion, 2.2.5.520)
+#pragma compile(ProductVersion, 2.2.6.1204)
 
-#pragma compile(LegalCopyright, 2016-2022 © La Communauté Tunisienne des Enseignants d'Informatique)
+#pragma compile(LegalCopyright, 2016-2023 © La Communauté Tunisienne des Enseignants d'Informatique)
 #pragma compile(Comments,'BacBackup - Module de Sauvegarde')
 #pragma compile(Out, Installer\Files\BacBackup_Sauvegarder.exe)
 #pragma compile(CompanyName, La Communauté Tunisienne des Enseignants d'Informatique)
@@ -316,6 +316,7 @@ Func VerifDossiersSurBureau()
 		If $iFilesCountInFldr = 0 And $iFldrSize = 0 Then ContinueLoop
 		;-----
 		$DossierBK = _FineBureauPath($DossierTravail[$i])
+
 		$Numero = IniRead($Lecteur & $DossierSauvegardes & "\BacBackup\BacBackup.ini", "DerniersDossiers", $DossierBK, "-111")
 		If $Numero = "-111" Then
 			$Liste[0] += 1 ;
@@ -328,9 +329,15 @@ Func VerifDossiersSurBureau()
 		If IsArray($Kes) Then
 			For $x = 1 To $Kes[0]
 ;~ If File does not exist then copy the file and create directory if required
-				$Tmp = StringTrimLeft($Kes[$x], 3) ;  "C:\Bac2020\123456\devoir.pas" >>> "Bac2020\123456\devoir.pas"
-				$Tmp = StringTrimLeft($Tmp, StringInStr($Tmp, '\')) ; "Bac2020\123456\devoir.pas" >>> "123456\devoir.pas"
+;~ 				$Tmp = StringTrimLeft($Kes[$x], 3) ;  "C:\Bac2020\123456\devoir.pas" >>> "Bac2020\123456\devoir.pas"
+;~ 				MsgBox($MB_SYSTEMMODAL, 'Tmp-1', $Tmp, 360)
+;~ 				$Tmp = StringTrimLeft($Tmp, StringInStr($Tmp, '\')) ; "Bac2020\123456\devoir.pas" >>> "123456\devoir.pas"
+				$Tmp = StringReplace($Kes[$x], @DesktopDir & '\', '')
+				$Tmp = StringTrimLeft($Tmp, StringInStr($Tmp, '\'))
+;~ 				MsgBox($MB_SYSTEMMODAL, 'Tmp-2', $Tmp, 360)
 				$FichierBCK = $Lecteur & $DossierSauvegardes & '\Tmp\' & $DossierBK & '\' & $Tmp
+;~ 				MsgBox($MB_SYSTEMMODAL, '$FichierBCK', $FichierBCK, 360)
+;~ 				MsgBox($MB_SYSTEMMODAL, '$Kes[$x]', $Kes[$x], 360)
 				If (FileExists($FichierBCK) = 0) Or _IsFileDiff($Kes[$x], $FichierBCK) Then
 					$Liste[0] += 1 ;
 					_ArrayAdd($Liste, $DossierTravail[$i])
