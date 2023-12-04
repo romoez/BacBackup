@@ -39,34 +39,36 @@
 
 ## Liste de dossiers surveillés par BacBackup:
 
-| Dossiers                                                        | Exemples                                              |
-| --------------------------------------------------------------- | ----------------------------------------------------- |
-| C:\\Bac\*2\*                                                    | C:\\Bac2022                                           |
-| C:\\7\*                                                         | C:\\7b2                                               |
-| C:\\8\*                                                         | C:\\8ème B7                                           |
-| C:\\9\*                                                         | C:\\9 base 1                                          |
-| C:\\1\*                                                         | C:\\1s3                                               |
-| C:\\2\*                                                         | C:\\2 TI                                              |
-| C:\\3\*                                                         | C:\\3 eco 2                                           |
-| C:\\4\*                                                         | C:\\4Lettres1                                         |
-| C:\\DC\*                                                        | C:\\dc3                                               |
-| C:\\DS\*                                                        | C:\\ds 2                                              |
-| C:\\TPW\*                                                       | C:\\tpw 1.5                                           |
-| C:\\{ProgramFiles}\\EasyPHP\*\\{dossier d'hébergement d'Apache} | C:\\Program Files (x86)\\EasyPHP-12.1\\www            |
-| C:\\{ProgramFiles}\\EasyPHP\*\\{dossier des BD MySql}           | C:\\Program Files (x86)\\EasyPHP-x 2.0b1\\mysql\\data |
-| C:\\EasyPHP\*\\{dossier d'hébergement d'Apache}                 | C:\\EasyPHP-12.1\\www                                 |
-| C:\\EasyPHP\*\\{dossier des BD MySql}                           | C:\\EasyPHP-x 2.0b1\\mysql\\data                      |
-| C:\\xampp\*\\{dossier d'hébergement d'Apache}                   | C:\\xampp7.3.6\\htdocs                                |
-| C:\\xampp\*\\{dossier des BD MySql}                             | C:\\xampp7.3.6\\mysql\\data                           |
-| C:\\Wamp\*\\{dossier d'hébergement d'Apache}                    | C:\\wamp 2.5x32\\www                                  |
-| C:\\Wamp\*\\{dossier des BD MySql}                              | C:\\wamp 2.5x32\\bin\\mysql\\mysql5.6.17\\data        |
-| {Bureau}\\Bac\*2\*                                              | C:\\Users\\Eleve\\Desktop\\Bac2022                    |
-| {Bureau}\\7\*                                                   | C:\\Users\\Eleve\\Desktop\\7b2                        |
-| {Bureau}\\8\*                                                   | C:\\Users\\Eleve\\Desktop\\8ème B7                    |
-| {Bureau}\\9\*                                                   | C:\\Users\\Eleve\\Desktop\\9 base 1                   |
-| {Bureau}\\1\*                                                   | C:\\Users\\Eleve\\Desktop\\1s3                        |
-| {Bureau}\\2\*                                                   | C:\\Users\\Eleve\\Desktop\\2 TI                       |
-| {Bureau}\\3\*                                                   | C:\\Users\\Eleve\\Desktop\\3 eco 2                    |
-| {Bureau}\\4\*                                                   | C:\\Users\\Eleve\\Desktop\\4Lettres1                  |
-| {Bureau}\\DC\*                                                  | C:\\Users\\Eleve\\Desktop\\dc3                        |
-| {Bureau}\\DS\*                                                  | C:\\Users\\Eleve\\Desktop\\ds 2                       |
+| Dossiers                                                            | Exemples                                              |
+| ------------------------------------------------------------------- | ----------------------------------------------------- |
+| C:\\Bac\*2\*                                                        | C:\\Bac2025                                           |
+| C:\\7\*                                                             | C:\\7b2                                               |
+| C:\\8\*                                                             | C:\\8ème B7                                           |
+| C:\\9\*                                                             | C:\\9 base 1                                          |
+| C:\\1\*                                                             | C:\\1s3                                               |
+| C:\\2\*                                                             | C:\\2 TI                                              |
+| C:\\3\*                                                             | C:\\3 eco 2                                           |
+| C:\\4\*                                                             | C:\\4Lettres1                                         |
+| C:\\DC\*                                                            | C:\\dc3                                               |
+| C:\\DS\*                                                            | C:\\ds 2                                              |
+| C:\\TPW\*                                                           | C:\\tpw 1.5                                           |
+| C:\\xampp_lite\*\\\{dossier d'hébergement d'Apache\}                | C:\\xampp_lite_8_2\\www                               |
+| C:\\xampp_lite\*\\\{dossier des BD MySql\}                          | C:\\xampp_lite_8_2\\mysql\\data                       |
+| C:\\\{ProgramFiles\}\\EasyPHP\*\\\{dossier d'hébergement d'Apache\} | C:\\Program Files (x86)\\EasyPHP-12.1\\www            |
+| C:\\\{ProgramFiles\}\\EasyPHP\*\\\{dossier des BD MySql\}           | C:\\Program Files (x86)\\EasyPHP-x 2.0b1\\mysql\\data |
+| C:\\EasyPHP\*\\\{dossier d'hébergement d'Apache\}                   | C:\\EasyPHP-12.1\\www                                 |
+| C:\\EasyPHP\*\\\{dossier des BD MySql\}                             | C:\\EasyPHP-x 2.0b1\\mysql\\data                      |
+| C:\\xampp\*\\\{dossier d'hébergement d'Apache\}                     | C:\\xampp7.3.6\\htdocs                                |
+| C:\\xampp\*\\\{dossier des BD MySql\}                               | C:\\xampp7.3.6\\mysql\\data                           |
+| C:\\Wamp\*\\\{dossier d'hébergement d'Apache\}                      | C:\\wamp 2.5x32\\www                                  |
+| C:\\Wamp\*\\\{dossier des BD MySql\}                                | C:\\wamp 2.5x32\\bin\\mysql\\mysql5.6.17\\data        |
+| \{Bureau\}\\Bac\*2\*                                                | C:\\Users\\Eleve\\Desktop\\Bac2022                    |
+| \{Bureau\}\\7\*                                                     | C:\\Users\\Eleve\\Desktop\\7b2                        |
+| \{Bureau\}\\8\*                                                     | C:\\Users\\Eleve\\Desktop\\8ème B7                    |
+| \{Bureau\}\\9\*                                                     | C:\\Users\\Eleve\\Desktop\\9 base 1                   |
+| \{Bureau\}\\1\*                                                     | C:\\Users\\Eleve\\Desktop\\1s3                        |
+| \{Bureau\}\\2\*                                                     | C:\\Users\\Eleve\\Desktop\\2 TI                       |
+| \{Bureau\}\\3\*                                                     | C:\\Users\\Eleve\\Desktop\\3 eco 2                    |
+| \{Bureau\}\\4\*                                                     | C:\\Users\\Eleve\\Desktop\\4Lettres1                  |
+| \{Bureau\}\\DC\*                                                    | C:\\Users\\Eleve\\Desktop\\dc3                        |
+| \{Bureau\}\\DS\*                                                    | C:\\Users\\Eleve\\Desktop\\ds 2                       |
