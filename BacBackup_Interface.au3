@@ -7,9 +7,9 @@
 
 #pragma compile(Icon, BacBackup.ico)
 #pragma compile(FileDescription, BacBackup Auto-Sauvegarde)
-#pragma compile(FileVersion, 2.2.6.1204, 2.2.6.1204) ; Le dernier paramètre est optionnel
+#pragma compile(FileVersion, 2.2.7.511, 2.2.7.511) ; Le dernier paramètre est optionnel
 #pragma compile(ProductName, BacBackup)
-#pragma compile(ProductVersion, 2.2.6.1204)
+#pragma compile(ProductVersion, 2.2.7.511)
 
 #pragma compile(LegalCopyright, © La Communauté Tunisienne des Enseignants d'Informatique)
 #pragma compile(Comments,'BacBackup - Fenêtre principale')
@@ -239,7 +239,7 @@ Func _MainGui()
 	GUICtrlCreateLabel("BacBackup " & $Prog_Version, 200, 40, 250, 35, -1, -1)
 	GUICtrlSetFont(-1, 18, 100, 0, "Tahoma")
 ;~ 	GUICtrlSetBkColor(-1, "-2")
-	GUICtrlCreateLabel("Copyright © 2016-2023  La Communauté Tunisienne des Enseignants d'Informatique.", 200, 75, 280, 30, -1, -1)
+	GUICtrlCreateLabel("Copyright © 2016-" & @YEAR & " La Communauté Tunisienne des Enseignants d'Informatique.", 200, 75, 280, 30, -1, -1)
 	GUICtrlSetFont(-1, 8, 600, 0, "Comic Sans MS")
 	GUICtrlSetBkColor(-1, "-2")
 
@@ -306,7 +306,7 @@ Func _MainGui()
 					Case $hMail
 						ShellExecute("mailto:moez.romdhane@tarbia.tn?subject=BacBackup " & $Prog_Version)
 					Case $hGitHubURL
-						ShellExecute("https://https://github.com/romoez/BacBackup", "", "", "open")  ;
+						ShellExecute("https://github.com/romoez/BacBackup", "", "", "open")  ;
 				EndSwitch
 		EndSwitch
 	WEnd
