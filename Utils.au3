@@ -10,7 +10,8 @@ Global Const $FREE_SPACE_DRIVE_BACKUP = 5000 ;en MB
 ;#########################################################################################
 
 Func DossiersBac($Path = 1) ; 1:Chemins complets, 0:Chemins relatifs
-	Local $Bac = _FileListToArray(@HomeDrive, "bac*2*", 2, $Path)
+;~ 	dans certain cas @HomeDrive retoune une chaîne vide --> remplacée par : StringLeft(@WindowsDir,2)
+	Local $Bac = _FileListToArray(StringLeft(@WindowsDir,2), "bac*2*", 2, $Path)
 	Local $Liste[1] = [0] ;
 
 	If IsArray($Bac) Then
@@ -24,7 +25,7 @@ EndFunc   ;==>DossiersBac
 ;#########################################################################################
 
 Func _DossiersTravailEleves($FullPath = 1) ; 1:Chemins complets, 0:Chemins relatifs
-	Local $AutresClasses = _FileListToArrayRec(@HomeDrive, "1*;2*;3*;4*;7*;8*;9*;bac*;dc*;ds*", 30, 0, 2, $FullPath + 1)
+	Local $AutresClasses = _FileListToArrayRec(StringLeft(@WindowsDir,2), "1*;2*;3*;4*;7*;8*;9*;bac*;dc*;ds*", 30, 0, 2, $FullPath + 1)
 	Local $Liste[1] = [0] ;
 
 
@@ -53,9 +54,11 @@ EndFunc   ;==>_DossiersSurBureau
 
 Func LecteurSauvegarde()
 	Local $aDrive = DriveGetDrive('FIXED')
-	$Lecteur = @HomeDrive ; "C:" ; $aDrive[1] ; $aDrive[1] peut être A: !!
+    Local $HomeDrive = StringLeft(@WindowsDir,2)
+	; $Lecteur = @HomeDrive ; "C:" ; $aDrive[1] ; $aDrive[1] peut être A: !!
+	$Lecteur = $HomeDrive ; "C:" ; $aDrive[1] ; $aDrive[1] peut être A: !!
 	For $i = 1 To $aDrive[0]
-		If $aDrive[$i] = @HomeDrive Then ContinueLoop
+		If $aDrive[$i] = $HomeDrive Then ContinueLoop
 		If (DriveGetType($aDrive[$i], $DT_BUSTYPE) <> "USB") _ ; pour Exclure les hdd externes
 				And _WinAPI_IsWritable($aDrive[$i]) _
 				And DriveSpaceFree($aDrive[$i] & "\") > $FREE_SPACE_DRIVE_BACKUP _ ;1Go
@@ -81,8 +84,10 @@ EndFunc   ;==>_IntervalleInterSauvegardesEnMinutes
 
 ;#########################################################################################
 
+#comments-start
 Func DossiersTPW($Path = 1) ; 1:Chemins complets, 0:Chemins relatifs
-	Local $TPW = _FileListToArray(@HomeDrive, "TPW*", 2, $Path)
+    Local $HomeDrive = StringLeft(@WindowsDir,2)
+	Local $TPW = _FileListToArray($HomeDrive, "TPW*", 2, $Path)
 	Local $Liste[1] = [0] ;
 
 	If IsArray($TPW) Then
@@ -92,13 +97,13 @@ Func DossiersTPW($Path = 1) ; 1:Chemins complets, 0:Chemins relatifs
 	EndIf
 	Return $Liste
 EndFunc   ;==>DossiersTPW
-
+#comments-end
 ;#########################################################################################
 
 Func DossiersEasyPHPwww($FullPath = 1) ; 1:Chemins complets, 0:Chemins relatifs
 	Local $aEasyPHP[1] = [0]
 
-	Local $aTmpEasyPHP = _FileListToArrayRec(@HomeDrive, "EasyPHP*;wamp*;xampp*;apachefriends*", 30, 0, 2, $FullPath + 1)
+	Local $aTmpEasyPHP = _FileListToArrayRec(StringLeft(@WindowsDir,2), "EasyPHP*;wamp*;xampp*;apachefriends*", 30, 0, 2, $FullPath + 1)
 
 	If IsArray($aTmpEasyPHP) Then
 		$aEasyPHP[0] += $aTmpEasyPHP[0]
@@ -146,7 +151,7 @@ EndFunc   ;==>DossiersEasyPHPwww
 
 Func DossiersEasyPHPdata($FullPath = 1) ; 1:Chemins complets, 0:Chemins relatifs
 	Local $aEasyPHP[1] = [0]
-	Local $aTmpEasyPHP = _FileListToArrayRec(@HomeDrive, "EasyPHP*;wamp*;xampp*;apachefriends*", 30, 0, 2, $FullPath + 1)
+	Local $aTmpEasyPHP = _FileListToArrayRec(StringLeft(@WindowsDir,2), "EasyPHP*;wamp*;xampp*;apachefriends*", 30, 0, 2, $FullPath + 1)
 
 	If IsArray($aTmpEasyPHP) Then
 		$aEasyPHP[0] += $aTmpEasyPHP[0]
@@ -166,14 +171,17 @@ Func DossiersEasyPHPdata($FullPath = 1) ; 1:Chemins complets, 0:Chemins relatifs
 
 	If IsArray($aEasyPHP) Then
 		For $i = 1 To $aEasyPHP[0]
-			$data = $aEasyPHP[$i] & '\mysql\data'  ;EasyPHP 1.x & 2.x & 3.x & 5.x & 6.x & 12.x
+			$data = $aEasyPHP[$i] & '\apps\mysql\data'  ;xampp-lite
 			If FileExists($data) Then
 				$Liste[0] += 1 ;
 				_ArrayAdd($Liste, $data) ;
 			ElseIf FileExists($aEasyPHP[$i] & '\binaries\mysql\data') Then ;EasyPHP 13.x & 14.x
 				$Liste[0] += 1 ;
 				_ArrayAdd($Liste, $aEasyPHP[$i] & '\binaries\mysql\data') ;
-			ElseIf FileExists($aEasyPHP[$i] & '\eds-binaries\dbserver') Then  ;EasyPHP 15.x & 16.x & 17.x
+			ElseIf FileExists($aEasyPHP[$i] & '\mysql\data') Then ;easyphp < 7 & xampp
+				$Liste[0] += 1 ;
+				_ArrayAdd($Liste, $aEasyPHP[$i] & '\mysql\data') ;
+			ElseIf FileExists($aEasyPHP[$i] & '\eds-binaries\dbserver')  Then ;EasyPHP 15.x & 16.x & 17.x
 				$data = _FindDataFldr($aEasyPHP[$i] & '\eds-binaries\dbserver')  ;EasyPHP 15.x & 16.x & 17.x
 				If FileExists($data) Then
 					$Liste[0] += 1 ;
@@ -185,9 +193,12 @@ Func DossiersEasyPHPdata($FullPath = 1) ; 1:Chemins complets, 0:Chemins relatifs
 					$Liste[0] += 1 ;
 					_ArrayAdd($Liste, $data) ;
 				EndIf
-			ElseIf FileExists($aEasyPHP[$i] & '\xampp\mysql\data') Then ;EasyPHP 13.x & 14.x
-				$Liste[0] += 1 ;
-				_ArrayAdd($Liste, $aEasyPHP[$i] & '\xampp\mysql\data') ;
+			ElseIf (FileExists($aEasyPHP[$i] & '\bin\mariadb')) Then ;Wamp
+				$data = _FindDataFldr($aEasyPHP[$i] & '\bin\mariadb')
+				If FileExists($data) Then
+					$Liste[0] += 1 ;
+					_ArrayAdd($Liste, $data) ;
+				EndIf
 			EndIf
 		Next
 	EndIf

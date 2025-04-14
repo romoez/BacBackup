@@ -7,11 +7,11 @@
 
 #pragma compile(Icon, BacBackup.ico)
 #pragma compile(FileDescription, BacBackup Auto-Sauvegarde)
-#pragma compile(FileVersion, 2.2.7.511, 2.2.7.511) ; Le dernier paramètre est optionnel
+#pragma compile(FileVersion, 2.2.8.414, 2.2.8.414) ; Le dernier paramètre est optionnel
 #pragma compile(ProductName, BacBackup)
-#pragma compile(ProductVersion, 2.2.7.511)
+#pragma compile(ProductVersion, 2.2.8.414)
 
-#pragma compile(LegalCopyright, 2016-2024 © La Communauté Tunisienne des Enseignants d'Informatique)
+#pragma compile(LegalCopyright, 2016-2025 © La Communauté Tunisienne des Enseignants d'Informatique)
 #pragma compile(Comments,'BacBackup - Module de Sauvegarde')
 #pragma compile(Out, Installer\Files\BacBackup_Sauvegarder.exe)
 #pragma compile(CompanyName, La Communauté Tunisienne des Enseignants d'Informatique)
@@ -171,6 +171,7 @@ Func Sauvegarder()
 		Next
 	EndIf
 ;~ -----------
+#comments-start
 	$Kes = VerifTPW()
 	If $Kes[0] > 0 Then
 		For $x = 1 To $Kes[0]
@@ -188,7 +189,8 @@ Func Sauvegarder()
 			$Src = $CheminBK & "\"
 			RunWait(@ComSpec & ' /C 7za.exe a "' & $Dest & '" "' & $Src & '" -t7z -r', @ScriptDir, @SW_HIDE)
 		Next
-	EndIf
+EndIf
+#comments-end
 ;~ -----------
 	$Kes = VerifEasyPHPwww()
 	If $Kes[0] > 0 Then
@@ -209,19 +211,31 @@ Func Sauvegarder()
 	EndIf
 ;~ -----------
 	$Kes = VerifEasyPHPdata()
-;~ 	If $Kes[0] > 0 Then
-;~ 		For $x = 1 To $Kes[0]
+	If $Kes[0] > 0 Then
+		For $x = 1 To $Kes[0]
+			$NbOperationsCopie += 1
+			$DossierSrc = _FineDataPath($Kes[$x])
+			$DossierBK = $DossierSrc ;& "____" & $Num & '___' & @HOUR & "h" & @MIN
+			$CheminBK = $Lecteur & $DossierSauvegardes & '\Tmp\' & $DossierBK ;Dossier "X:\sauvegardes\Tmp\..."
+			DirCopy($Kes[$x], $CheminBK, 1)
+			_LienVersDossier($Kes[$x], $CheminBK)
+			$CheminsSauves &= @CRLF & """" & $DossierBK & """"
+			$PasDeModifications += 1
+			$Num = _IncrementerNum($DossierBK)
+			$Dest = $Lecteur & $DossierSauvegardes & "\BacBackup\" & $DossierSession & "\" & $DossierBK & "___" & $Num & ".7z"
+			$Src = $CheminBK & "\"
+			RunWait(@ComSpec & ' /C 7za.exe a "' & $Dest & '" "' & $Src & '" -t7z -r', @ScriptDir, @SW_HIDE)
+		Next
+	EndIf
+
+#comments-start
 	If IsArray($Kes) And $Kes[0] > 0 Then
 		For $x = 1 To UBound($Kes)-1
 			$DossierSrc = _FineDataPath($Kes[$x])
 			$DossierBK = $DossierSrc ;& "____" & $Num & '___' & @HOUR & "h" & @MIN
 			$CheminBK = $Lecteur & $DossierSauvegardes & '\Tmp\' & $DossierBK ;Dossier "X:\sauvegardes\Tmp\..."
-			$ListeDossiersDansData = _FileListToArrayRec($Kes[$x], "*||phpmyadmin;mysql;performance_schema", 2, 0, 2, 0) ;Liste de Dossiers
+			$ListeDossiersDansData = _FileListToArrayRec($Kes[$x], "*|phpmyadmin;mysql;performance_schema;sys;cdcol;webauth|", 2, 0, 2, 0) ;Liste de Dossiers
 			If @error or Not IsArray($ListeDossiersDansData) Then ContinueLoop
-			_ArrayDelete($ListeDossiersDansData, _ArraySearch($ListeDossiersDansData, "phpmyadmin"))
-			_ArrayDelete($ListeDossiersDansData, _ArraySearch($ListeDossiersDansData, "mysql"))
-			_ArrayDelete($ListeDossiersDansData, _ArraySearch($ListeDossiersDansData, "performance_schema"))
-			_ArrayDelete($ListeDossiersDansData, _ArraySearch($ListeDossiersDansData, "sys"))
 			$ListeDossiersDansData[0] = UBound($ListeDossiersDansData) - 1
 			If $ListeDossiersDansData[0] > 0 Then
 				$NbOperationsCopie += 1
@@ -247,6 +261,7 @@ Func Sauvegarder()
 			EndIf
 		Next
 	EndIf
+#comments-end
 EndFunc   ;==>Sauvegarder
 
 ;#########################################################################################
@@ -357,7 +372,7 @@ Func VerifDossiersSurBureau()
 EndFunc   ;==>VerifDossiersSurBureau
 
 ;#########################################################################################
-
+#comments-start
 Func VerifTPW()
 	Local $TPW = DossiersTPW() ;
 
@@ -402,6 +417,7 @@ Func VerifTPW()
 EndFunc   ;==>VerifTPW
 
 ;#########################################################################################
+#comments-end
 
 Func VerifEasyPHPwww()
 	Local $EasyPHPwww = DossiersEasyPHPwww() ;
@@ -470,12 +486,8 @@ Func VerifEasyPHPdata()
 			ContinueLoop
 		EndIf
 
-		$TmpDossiers = _FileListToArrayRec($EasyPHPdata[$i], "*||phpmyadmin;mysql;performance_schema", 2, 0, 2, 2)
+		$TmpDossiers = _FileListToArrayRec($EasyPHPdata[$i], "*|phpmyadmin;mysql;performance_schema;sys;cdcol;webauth|", 2, 0, 2, 2)
 		If Not IsArray($TmpDossiers) Then ContinueLoop
-		_ArrayDelete($TmpDossiers, _ArraySearch($TmpDossiers, $EasyPHPdata[$i] & "\" & "phpmyadmin"))
-		_ArrayDelete($TmpDossiers, _ArraySearch($TmpDossiers, $EasyPHPdata[$i] & "\" & "mysql"))
-		_ArrayDelete($TmpDossiers, _ArraySearch($TmpDossiers, $EasyPHPdata[$i] & "\" & "performance_schema"))
-		_ArrayDelete($TmpDossiers, _ArraySearch($TmpDossiers, $EasyPHPdata[$i] & "\" & "sys"))
 		$TmpDossiers[0] = UBound($TmpDossiers) - 1
 
 		For $j = 1 To $TmpDossiers[0]
@@ -516,7 +528,9 @@ Func _FineDataPath($sDataPath)
 	$sDataPath = StringReplace($sDataPath, "Program Files (x86)", "{pf}")
 	$sDataPath = StringReplace($sDataPath, "Program Files", "{pf}")
 	$sDataPath = StringRegExpReplace($sDataPath, "\\bin\\.*", "", 0)
+	$sDataPath = StringRegExpReplace($sDataPath, "\\apps\\.*", "", 0)
 	$sDataPath = StringRegExpReplace($sDataPath, "\\mysql.*", "", 0)
+	$sDataPath = StringRegExpReplace($sDataPath, "\\mariadb.*", "", 0)
 	$sDataPath = StringRegExpReplace($sDataPath, "\\eds-binaries.*", "", 0)
 	$sDataPath &= "\{data}"
 	$sDataPath = StringReplace($sDataPath, "\", "-")
