@@ -7,11 +7,11 @@
 
 #pragma compile(Icon, BacBackup.ico)
 #pragma compile(FileDescription, BacBackup Auto-Sauvegarde)
-#pragma compile(FileVersion, 2.2.7.511, 2.2.7.511) ; Le dernier paramètre est optionnel
+#pragma compile(FileVersion, 2.2.8.414, 2.2.8.414) ; Le dernier paramètre est optionnel
 #pragma compile(ProductName, BacBackup)
-#pragma compile(ProductVersion, 2.2.7.511)
+#pragma compile(ProductVersion, 2.2.8.414)
 
-#pragma compile(LegalCopyright, © La Communauté Tunisienne des Enseignants d'Informatique)
+#pragma compile(LegalCopyright, 2016-2025 © La Communauté Tunisienne des Enseignants d'Informatique)
 #pragma compile(Comments,'BacBackup - Fenêtre principale')
 #pragma compile(Out, Installer\Files\BacBackup_Interface.exe)
 #pragma compile(CompanyName, La Communauté Tunisienne des Enseignants d'Informatique)
@@ -52,6 +52,7 @@ EndIf
 $DossierSession = IniRead($CheminSauve & "\BacBackup.ini", "Params", "DossierSession", "")
 $Prog_Version = FileGetVersion(@ScriptFullPath)
 
+GUIRegisterMsg($WM_NOTIFY, "WM_NOTIFY")
 _MainGui()
 
 ;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -59,9 +60,10 @@ _MainGui()
 ;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 Func _MainGui()
+	Local $iExListViewStyle = BitOR($LVS_EX_FULLROWSELECT, $LVS_EX_GRIDLINES)
 	Local $nMsg, $aPos
 	Local $iLinks = 5
-	Local $sMainGuiTitle = "BacBackup " & $Prog_Version
+	Global $sMainGuiTitle = "BacBackup " & $Prog_Version
 	Local $sHeader = ""
 	;	Local $sFooter = "CPU >> "& @CPUArch &@TAB &"#"&@TAB &"Version de Windows >> "&@OSVersion&@TAB&"    #" &@TAB &"Dossier Système >> "&@WindowsDir
 	Local $aLink[$iLinks], $aPanel[$iLinks]
@@ -358,10 +360,10 @@ Func RemplirListeView()
 	_ArrayDelete($Kes, 0) ;
 	_ArrayAdd($Liste, $Kes)
 	;------
-	$Kes = DossiersTPW() ;
-	$Liste[0] += $Kes[0] ;
-	_ArrayDelete($Kes, 0) ;
-	_ArrayAdd($Liste, $Kes)
+;~ 	$Kes = DossiersTPW() ;
+;~ 	$Liste[0] += $Kes[0] ;
+;~ 	_ArrayDelete($Kes, 0) ;
+;~ 	_ArrayAdd($Liste, $Kes)
 	;------
 	$Kes = DossiersEasyPHPwww() ;
 	$Liste[0] += $Kes[0] ;
@@ -386,3 +388,39 @@ Func RemplirListeView()
 	$aItems = 0
 	SplashOff()
 EndFunc   ;==>RemplirListeView
+
+
+Func WM_NOTIFY($hWnd, $iMsg, $wParam, $lParam)
+	#forceref $iMsg, $wParam
+	Local $tMsgFilter
+
+	Local $tNMHDR = DllStructCreate($tagNMHDR, $lParam)
+	Local $hWndFrom = HWnd(DllStructGetData($tNMHDR, "hWndFrom"))
+	Local $iCode = DllStructGetData($tNMHDR, "Code")
+	;;;; Test
+	Local $tagNMHDR = DllStructCreate("int;int;int", $lParam)
+	Local $code = DllStructGetData($tagNMHDR, 3)
+	Local $selectedIndex, $texteColonne2
+
+	If $wParam = $GUI_ListeFichiers And $code = $NM_DBLCLK Then
+		$selectedIndex = _GUICtrlListView_GetSelectedIndices($GUI_ListeFichiers, True)
+		If $selectedIndex[0] > 0 Then
+			$texteColonne2 = _GUICtrlListView_GetItemText($GUI_ListeFichiers, $selectedIndex[1], 1)
+			_ShowInExplorer($texteColonne2)
+		EndIf
+	EndIf
+	Return $GUI_RUNDEFMSG
+EndFunc   ;==>WM_NOTIFY
+
+Func _ShowInExplorer($sFileFolder)
+	If Not FileExists($sFileFolder) Then
+		MsgBox(16 + 262144, $sMainGuiTitle, "Cet élément a été déplacé ou supprimé:" & @CRLF & @CRLF & """" & $sFileFolder & """", 0, $hMainGUI)
+		Return
+	EndIf
+
+	If FileGetAttrib($sFileFolder) = 'D' Then ;c'est un dossier
+		Run("explorer.exe /n, /e, " & '"' & $sFileFolder & '"')
+	Else
+		Run("explorer.exe /n, /e, /select, " & '"' & $sFileFolder & '"')
+	EndIf
+EndFunc   ;==>_ShowInExplorer
