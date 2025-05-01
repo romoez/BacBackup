@@ -7,9 +7,9 @@
 
 #pragma compile(Icon, BacBackup.ico)
 #pragma compile(FileDescription, BacBackup Auto-Sauvegarde)
-#pragma compile(FileVersion, 2.2.8.414, 2.2.8.414) ; Le dernier paramètre est optionnel
+#pragma compile(FileVersion, 2.2.9.501, 2.2.9.501) ; Le dernier paramètre est optionnel
 #pragma compile(ProductName, BacBackup)
-#pragma compile(ProductVersion, 2.2.8.414)
+#pragma compile(ProductVersion, 2.2.9.501)
 
 #pragma compile(LegalCopyright, 2016-2025 © La Communauté Tunisienne des Enseignants d'Informatique)
 #pragma compile(Comments,'BacBackup - Module de Sauvegarde')

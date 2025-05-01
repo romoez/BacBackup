@@ -7,9 +7,9 @@
 
 #pragma compile(Icon, BacBackup.ico)
 #pragma compile(FileDescription, BacBackup Auto-Sauvegarde)
-#pragma compile(FileVersion, 2.2.8.414, 2.2.8.414) ; Le dernier paramètre est optionnel
+#pragma compile(FileVersion, 2.2.9.501, 2.2.9.501) ; Le dernier paramètre est optionnel
 #pragma compile(ProductName, BacBackup)
-#pragma compile(ProductVersion, 2.2.8.414)
+#pragma compile(ProductVersion, 2.2.9.501)
 
 #pragma compile(LegalCopyright, 2016-2025 © La Communauté Tunisienne des Enseignants d'Informatique)
 #pragma compile(Comments,'BacBackup - Fenêtre principale')
@@ -82,8 +82,9 @@ Func _MainGui()
 	$Logo = GUICtrlCreateIcon("res/Logo01-Interface.ico", -1, 6, 6, 40, 40)
 	;-----------------------------------
 	$LogoText = GUICtrlCreateIcon("res/Txt.ico", -1, 56, 10, 100, 20)
-	GUICtrlCreateLabel("Surveillance et sauvegarde automatique des dossiers de travail des élèves", 56, 35, 500)
-	GUICtrlSetFont(-1, 9, 500, "", "Tahoma", 5)
+	GUICtrlCreateLabel("Capture en temps réel de l’activité des élèves et sauvegarde automatique de leurs travaux", 56, 35, 500)
+;~ 	GUICtrlCreateLabel("Surveillance de l’activité et sauvegarde automatique des travaux des élèves", 56, 35, 500)
+	GUICtrlSetFont(-1, 8.5, 500, "", "Tahoma", 5)
 
 	GUICtrlCreateLabel("", 0, $iT, $iW, 2, $SS_SUNKEN) ;separator
 	GUICtrlCreateLabel("", $iLeftWidth, $iT + 2, 2, $iH - $iT - $iB - 2, $SS_SUNKEN) ;separator
@@ -139,7 +140,7 @@ Func _MainGui()
 	;add links to the left side
 	$aLink[1] = _AddNewLink("Dossiers Surveillés")
 	$aLink[2] = _AddNewLink("Paramètres", 22)
-	$aLink[3] = _AddNewLink("Aide", -155)
+;~ 	$aLink[3] = _AddNewLink("Aide", -155)
 	$aLink[4] = _AddNewLink("À propos", -222)
 	;and the corresponding GUI's
 	$aPanel[1] = _AddNewPanel("Dossiers Surveillés")
@@ -241,23 +242,24 @@ Func _MainGui()
 	GUICtrlCreateLabel("BacBackup " & $Prog_Version, 200, 40, 250, 35, -1, -1)
 	GUICtrlSetFont(-1, 18, 100, 0, "Tahoma")
 ;~ 	GUICtrlSetBkColor(-1, "-2")
-	GUICtrlCreateLabel("Copyright © 2016-" & @YEAR & " La Communauté Tunisienne des Enseignants d'Informatique.", 200, 75, 280, 30, -1, -1)
-	GUICtrlSetFont(-1, 8, 600, 0, "Comic Sans MS")
+	GUICtrlCreateLabel("© 2016-" & FileGetTime(@ScriptFullPath)[0] & " La Communauté Tunisienne des Enseignants d'Informatique.", 200, 100, 280, 30, -1, -1)
+	GUICtrlSetFont(-1, 8.5, 600, 0, "Tahoma")
 	GUICtrlSetBkColor(-1, "-2")
 
-	$hGitHubURL = _GUICtrlHyperLink_Create("https://github.com/romoez/BacBackup", 200, 105, 280, 20, 0x0000FF, 0x551A8B, _
+
+	GUICtrlCreateLabel("BacBackup est un outil de sauvegarde et de surveillance conçu pour les environnements éducatifs, permettant de sauvegarder automatiquement les travaux des élèves et de capturer leur activité à l’écran dans les salles informatiques.", 200, 160, 280, 75, -1, -1)
+	GUICtrlSetFont(-1, 8.5, 400, 0, "Tahoma")
+	GUICtrlSetBkColor(-1, "-2")
+
+	$hGitHubURL = _GUICtrlHyperLink_Create("https://github.com/romoez/BacBackup", 200, 260, 280, 20, 0x0000FF, 0x551A8B, _
 			 -1, '', "Téléchargement et code source")
+	GUICtrlSetFont(-1, 8.5, 600, 0, "Tahoma")
 
 
-	GUICtrlCreateLabel("BacBackup permet de: " & @CRLF & _
-			"1. Surveiller et sauvegarder les dossiers de travail des élèves." & @CRLF & _
-			"2. Prendre des captures d'écran toutes les 5 secondes.", 200, 135, 280, 75, -1, -1)
-	GUICtrlSetFont(-1, 8, 400, 0, "Tahoma")
-	GUICtrlSetBkColor(-1, "-2")
-	GUICtrlCreateLabel("", 295, 198, 100, 2, $SS_SUNKEN) ;separator
-	GUICtrlCreateLabel("Pour tout signalement d'erreur et pour toute suggestion d’amélioration, merci d'envoyer un e-mail à:", 200, 215, 280, 25, -1, -1)
-	GUICtrlSetFont(-1, 8, 500, 0, "Tahoma")
-	$hMail = _GUICtrlHyperLink_Create("moez.romdhane@tarbia.tn", 200, 245, -1, -1, 0x0000FF, 0x551A8B)
+;~ 	GUICtrlCreateLabel("", 295, 198, 100, 2, $SS_SUNKEN) ;separator
+;~ 	GUICtrlCreateLabel("Pour tout signalement d'erreur et pour toute suggestion d’amélioration, merci d'envoyer un e-mail à:", 200, 215, 280, 25, -1, -1)
+;~ 	GUICtrlSetFont(-1, 8, 500, 0, "Tahoma")
+;~ 	$hMail = _GUICtrlHyperLink_Create("moez.romdhane@tarbia.tn", 200, 245, -1, -1, 0x0000FF, 0x551A8B)
 	;Fin   *****************************************************************************************
 	;set default to Panel1
 	GUISwitch($aPanel[1])
@@ -280,8 +282,8 @@ Func _MainGui()
 						For $i = 0 To $aPanel[0]
 							WinMove($aPanel[$i], "", $iLeftWidth + 2, $iT, $iW - $iLeftWidth + 2, $iH - $iT - $iB - 20)
 						Next
-					Case $aLink[3]
-						ShellExecute(@ScriptDir & "\AideBB.chm")
+;~ 					Case $aLink[3]
+;~ 						ShellExecute(@ScriptDir & "\AideBB.chm")
 					Case $aLink[1], $aLink[2], $aLink[4]
 						For $i = 1 To $aLink[0]
 							If $nMsg[0] = $aLink[$i] Then
@@ -305,8 +307,8 @@ Func _MainGui()
 				EndSwitch
 			Case $aPanel[4] ;à propos
 				Switch $nMsg[0]
-					Case $hMail
-						ShellExecute("mailto:moez.romdhane@tarbia.tn?subject=BacBackup " & $Prog_Version)
+;~ 					Case $hMail
+;~ 						ShellExecute("mailto:moez.romdhane@tarbia.tn?subject=BacBackup " & $Prog_Version)
 					Case $hGitHubURL
 						ShellExecute("https://github.com/romoez/BacBackup", "", "", "open")  ;
 				EndSwitch
