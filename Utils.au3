@@ -187,17 +187,20 @@ Func DossiersEasyPHPdata($FullPath = 1) ; 1:Chemins complets, 0:Chemins relatifs
 					$Liste[0] += 1 ;
 					_ArrayAdd($Liste, $data) ;
 				EndIf
-			ElseIf (FileExists($aEasyPHP[$i] & '\bin\mysql')) Then ;Wamp
-				$data = _FindDataFldr($aEasyPHP[$i] & '\bin\mysql')
-				If FileExists($data) Then
-					$Liste[0] += 1 ;
-					_ArrayAdd($Liste, $data) ;
+			Else
+				If (FileExists($aEasyPHP[$i] & '\bin\mysql')) Then ;Wamp
+					$data = _FindDataFldr($aEasyPHP[$i] & '\bin\mysql')
+					If FileExists($data) Then
+						$Liste[0] += 1 ;
+						_ArrayAdd($Liste, $data) ;
+					EndIf
 				EndIf
-			ElseIf (FileExists($aEasyPHP[$i] & '\bin\mariadb')) Then ;Wamp
-				$data = _FindDataFldr($aEasyPHP[$i] & '\bin\mariadb')
-				If FileExists($data) Then
-					$Liste[0] += 1 ;
-					_ArrayAdd($Liste, $data) ;
+			    If (FileExists($aEasyPHP[$i] & '\bin\mariadb')) Then ;Wamp
+					$data = _FindDataFldr($aEasyPHP[$i] & '\bin\mariadb')
+					If FileExists($data) Then
+						$Liste[0] += 1 ;
+						_ArrayAdd($Liste, $data) ;
+					EndIf
 				EndIf
 			EndIf
 		Next
