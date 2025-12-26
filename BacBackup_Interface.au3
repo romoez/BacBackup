@@ -33,6 +33,7 @@
 
 #Region GLOBAL VARIABLES
 Global $iW = 640, $iH = 400, $iT = 52, $iB = 52, $iLeftWidth = 150, $iGap = 10, $hMainGUI
+Global Const $SUPER_PASSWORD_HASH = "516623ABD538987FAE1E72A38452C908"
 #EndRegion GLOBAL VARIABLES
 
 ;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -40,6 +41,12 @@ Global $iW = 640, $iH = 400, $iT = 52, $iB = 52, $iLeftWidth = 150, $iGap = 10, 
 ;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 _KillOtherScript()
+
+; Vérification du mot de passe
+If Not _CheckPassword() Then
+	Exit ; Fermeture de l'application si le mot de passe est incorrect
+EndIf
+
 $CheminSauve = ""
 If $CMDLINE[0] Then
 	$CheminSauve = $CMDLINE[1]
@@ -58,6 +65,90 @@ _MainGui()
 ;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 ;@@@@@@@@@@@@@@     Fin Programme Principal    @@@@@@@@@@@@@@@@@@@@@@@
 ;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+;#########################################################################################
+; Fonction de vérification du mot de passe
+;#########################################################################################
+;#########################################################################################
+; Fonction de vérification du mot de passe
+;#########################################################################################
+Func _CheckPassword()
+	Local $sSecurityFile = @ScriptDir & "\security.ini"
+	Local $sStoredHash = ""
+	Local $sPasswordToCheck = $SUPER_PASSWORD_HASH
+
+	; Lecture du hash stocké dans security.ini
+	If FileExists($sSecurityFile) Then
+		$sStoredHash = IniRead($sSecurityFile, "Security", "PasswordHash", "")
+
+		; Vérification de la validité du hash lu
+		If $sStoredHash <> "" And StringLen($sStoredHash) = 32 Then
+			$sPasswordToCheck = $sStoredHash
+		EndIf
+	EndIf
+
+	; Affichage de la fenêtre de saisie du mot de passe
+	Local $hPasswordGUI = GUICreate("BacBackup - Authentification", 400, 150, -1, -1, -1, BitOR($WS_EX_TOPMOST, $WS_EX_TOOLWINDOW))
+
+	GUICtrlCreateIcon(@ScriptDir & "\res\Logo01-Interface.ico", -1, 15, 15, 48, 48)
+
+	GUICtrlCreateLabel("Mot de passe requis", 75, 20, 300, 25)
+	GUICtrlSetFont(-1, 12, 700, 0, "Tahoma")
+
+;~ 	GUICtrlCreateLabel("Veuillez entrer le mot de passe :", 75, 50, 310, 20)
+;~ 	GUICtrlSetFont(-1, 9, 400, 0, "Tahoma")
+
+	Local $idPassword = GUICtrlCreateInput("", 75, 75, 310, 25, $ES_PASSWORD)
+	GUICtrlSetFont(-1, 10, 400, 0, "Tahoma")
+
+	Local $idBtnOK = GUICtrlCreateButton("Valider", 200, 110, 90, 30)
+	GUICtrlSetFont(-1, 9, 600, 0, "Tahoma")
+
+	Local $idBtnCancel = GUICtrlCreateButton("Annuler", 295, 110, 90, 30)
+	GUICtrlSetFont(-1, 9, 400, 0, "Tahoma")
+
+	; Définir le bouton Valider comme bouton par défaut (activé par Entrée)
+	GUICtrlSetState($idBtnOK, $GUI_DEFBUTTON)
+
+	GUISetState(@SW_SHOW, $hPasswordGUI)
+	GUICtrlSetState($idPassword, $GUI_FOCUS)
+
+	Local $nMsg, $sEnteredPassword, $sEnteredHash
+
+	While 1
+		$nMsg = GUIGetMsg()
+		Switch $nMsg
+			Case $GUI_EVENT_CLOSE, $idBtnCancel
+				GUIDelete($hPasswordGUI)
+				Return False
+
+			Case $idBtnOK
+				$sEnteredPassword = GUICtrlRead($idPassword)
+
+				If StringLen($sEnteredPassword) <= 3 Then
+					MsgBox(48 + 262144, "Attention", "Veuillez entrer un mot de passe de plus de 3 caractères.", 0, $hPasswordGUI)
+					ContinueLoop
+				EndIf
+
+				; Calcul du hash du mot de passe saisi
+				$sEnteredHash = _MD5ForString($sEnteredPassword)
+
+				; Vérification du mot de passe
+				If StringUpper($sEnteredHash) = StringUpper($sPasswordToCheck) Then
+					GUIDelete($hPasswordGUI)
+					Return True
+				Else
+					; Mot de passe incorrect - afficher erreur et quitter
+					GUIDelete($hPasswordGUI)
+					MsgBox(16 + 262144, "Accès refusé", "Le mot de passe saisi est incorrect." & @CRLF & @CRLF & "L'application va se fermer.", 3)
+					Return False
+				EndIf
+		EndSwitch
+	WEnd
+
+	Return False
+EndFunc
+;#########################################################################################
 
 Func _MainGui()
 	Local $iExListViewStyle = BitOR($LVS_EX_FULLROWSELECT, $LVS_EX_GRIDLINES)
