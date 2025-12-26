@@ -386,7 +386,124 @@ Func _MD5ForFile($sFile)
 EndFunc   ;==>_MD5ForFile
 
 ;■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _CRC32ForString
+; Description ...: Calculates the CRC32 checksum for a string (CRC-32/ISO-HDLC).
+; Syntax ........: _CRC32ForString($sString)
+; Parameters ....: $sString - The string to process.
+; Return values .: Success - Returns CRC32 value as an 8-character hex string.
+;                  Failure - Returns an empty string and sets @error:
+;                  |1 - Error during DLL call or memory structure creation.
+; Author ........: romoez (GitHub: https://github.com/romoez/BacBackup)
+; Modified from .: trancexx's _CRC32ForFile (https://www.autoitscript.com/forum/topic/95558-crc32-md4-md5-sha1-for-files/)
+; ===============================================================================================================================
+Func _CRC32ForString($sString)
+    ; 1. Convert string to UTF-8 binary format
+    Local $bBinary = StringToBinary($sString, 4) ; 4 = UTF-8 encoding
+    
+    ; 2. Get the actual size in bytes (BinaryLen) instead of character count (StringLen).
+    ; This is crucial because in UTF-8, special characters (like accents or emojis) 
+    ; can use more than 1 byte, while StringLen would only count them as 1.
+    Local $iByteLen = BinaryLen($bBinary)
+    
+    ; If the string is empty, return the CRC32 for an empty buffer
+    If $iByteLen = 0 Then Return Hex(0, 8)
+    
+    ; 3. Create a memory structure to hold the bytes for the DLL call
+    Local $tData = DllStructCreate("byte[" & $iByteLen & "]")
+    If @error Then Return SetError(1, 0, "") ; Memory allocation failed
+    
+    DllStructSetData($tData, 1, $bBinary)
+    
+    ; 4. Call RtlComputeCrc32 from ntdll.dll (native Windows function)
+    ; This is significantly faster than an AutoIt loop for CRC calculation.
+    Local $a_iCall = DllCall("ntdll.dll", "dword", "RtlComputeCrc32", _
+            "dword", 0, _ ; Initial CRC value
+            "ptr", DllStructGetPtr($tData), _ ; Pointer to data
+            "int", $iByteLen) ; Length in bytes
+    
+    ; Check for DllCall errors
+    If @error Or Not IsArray($a_iCall) Then
+        Return SetError(1, 0, "")
+    EndIf
+    
+    ; 5. Return the result as a formatted 8-character hexadecimal string
+    Local $iCRC32 = $a_iCall[0]
+    Return SetError(0, 0, Hex($iCRC32, 8))
+EndFunc   ;==>_CRC32ForString
 ;■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■
+; #FUNCTION# ====================================================================================================================
+; Name ..........: _MD5ForString
+; Description ...: Calculates the MD5 hash for a string.
+; Syntax ........: _MD5ForString($sString)
+; Parameters ....: $sString - The string to process.
+; Return values .: Success - Returns MD5 value as a 32-character hex string.
+;                  Failure - Returns an empty string and sets @error:
+;                  |1 - Error during memory structure creation.
+;                  |2 - MD5Init function call failed.
+;                  |3 - MD5Update function call failed.
+;                  |4 - MD5Final function call failed.
+; Author ........: romoez (GitHub: https://github.com/romoez/BacBackup)
+; Modified from .: trancexx's _MD5ForFile (https://www.autoitscript.com/forum/topic/95558-crc32-md4-md5-sha1-for-files/)
+; ===============================================================================================================================
+Func _MD5ForString($sString)
+    ; 1. Convert string to UTF-8 binary format
+    Local $bBinary = StringToBinary($sString, 4) ; 4 = UTF-8 encoding
 
-; MsgBox($MB_SYSTEMMODAL, 'dossier', $www, 360)
-; _ArrayDisplay($Liste, 'BacBackup 1.0.0',"",32,Default ,"Liste de Dossiers/Fichiers Surveillés")
+    ; 2. Get the actual size in bytes (BinaryLen) instead of character count (StringLen).
+    ; This is crucial because in UTF-8, special characters (like accents or emojis)
+    ; can use more than 1 byte, while StringLen would only count them as 1.
+    Local $iByteLen = BinaryLen($bBinary)
+
+    ; If the string is empty, calculate MD5 for an empty buffer
+    If $iByteLen = 0 Then
+        $bBinary = Binary("") ; Empty binary
+        $iByteLen = 0
+    EndIf
+
+    ; 3. Create a memory structure to hold the bytes
+    Local $tData = DllStructCreate("byte[" & ($iByteLen > 0 ? $iByteLen : 1) & "]")
+    If @error Then Return SetError(1, 0, "") ; Memory allocation failed
+
+    If $iByteLen > 0 Then
+        DllStructSetData($tData, 1, $bBinary)
+    EndIf
+
+    ; 4. Create MD5 context structure (required by advapi32.dll MD5 functions)
+    Local $tMD5_CTX = DllStructCreate("dword i[2];" & _
+            "dword buf[4];" & _
+            "ubyte in[64];" & _
+            "ubyte digest[16]")
+
+    If @error Then Return SetError(1, 0, "") ; Memory allocation failed
+
+    ; 5. Initialize MD5 context
+    DllCall("advapi32.dll", "none", "MD5Init", "ptr", DllStructGetPtr($tMD5_CTX))
+
+    If @error Then
+        Return SetError(2, 0, "")
+    EndIf
+
+    ; 6. Update MD5 context with data
+    DllCall("advapi32.dll", "none", "MD5Update", _
+            "ptr", DllStructGetPtr($tMD5_CTX), _
+            "ptr", DllStructGetPtr($tData), _
+            "dword", $iByteLen)
+
+    If @error Then
+        Return SetError(3, 0, "")
+    EndIf
+
+    ; 7. Finalize MD5 calculation
+    DllCall("advapi32.dll", "none", "MD5Final", "ptr", DllStructGetPtr($tMD5_CTX))
+
+    If @error Then
+        Return SetError(4, 0, "")
+    EndIf
+
+    ; 8. Extract and format the MD5 digest as a 32-character hexadecimal string
+    Local $sMD5 = Hex(DllStructGetData($tMD5_CTX, "digest"))
+
+    Return SetError(0, 0, $sMD5)
+
+EndFunc   ;==>_MD5ForString
