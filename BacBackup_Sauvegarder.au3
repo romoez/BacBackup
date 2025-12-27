@@ -171,27 +171,6 @@ Func Sauvegarder()
 		Next
 	EndIf
 ;~ -----------
-#comments-start
-	$Kes = VerifTPW()
-	If $Kes[0] > 0 Then
-		For $x = 1 To $Kes[0]
-			$NbOperationsCopie += 1
-			$DossierSrc = StringTrimLeft($Kes[$x], 3) ;
-			$DossierBK = $DossierSrc ;& "____" & $Num & '___' & @HOUR & "h" & @MIN
-			$CheminBK = $Lecteur & $DossierSauvegardes & '\Tmp\' & $DossierBK ;Dossier "X:\sauvegardes\Tmp\..."
-			DirCreate($CheminBK)
-			FileCopy($Kes[$x] & '\*.pas', $CheminBK, 1)
-			_LienVersDossier($Kes[$x], $CheminBK)
-			$CheminsSauves &= @CRLF & """" & $DossierBK & """"
-			$PasDeModifications += 1
-			$Num = _IncrementerNum($DossierBK)
-			$Dest = $Lecteur & $DossierSauvegardes & "\BacBackup\" & $DossierSession & "\" & $DossierBK & "___" & $Num & ".7z"
-			$Src = $CheminBK & "\"
-			RunWait(@ComSpec & ' /C 7za.exe a "' & $Dest & '" "' & $Src & '" -t7z -r', @ScriptDir, @SW_HIDE)
-		Next
-EndIf
-#comments-end
-;~ -----------
 	$Kes = VerifEasyPHPwww()
 	If $Kes[0] > 0 Then
 		For $x = 1 To $Kes[0]
@@ -227,41 +206,6 @@ EndIf
 			RunWait(@ComSpec & ' /C 7za.exe a "' & $Dest & '" "' & $Src & '" -t7z -r', @ScriptDir, @SW_HIDE)
 		Next
 	EndIf
-
-#comments-start
-	If IsArray($Kes) And $Kes[0] > 0 Then
-		For $x = 1 To UBound($Kes)-1
-			$DossierSrc = _FineDataPath($Kes[$x])
-			$DossierBK = $DossierSrc ;& "____" & $Num & '___' & @HOUR & "h" & @MIN
-			$CheminBK = $Lecteur & $DossierSauvegardes & '\Tmp\' & $DossierBK ;Dossier "X:\sauvegardes\Tmp\..."
-			$ListeDossiersDansData = _FileListToArrayRec($Kes[$x], "*|phpmyadmin;mysql;performance_schema;sys;cdcol;webauth|", 2, 0, 2, 0) ;Liste de Dossiers
-			If @error or Not IsArray($ListeDossiersDansData) Then ContinueLoop
-			$ListeDossiersDansData[0] = UBound($ListeDossiersDansData) - 1
-			If $ListeDossiersDansData[0] > 0 Then
-				$NbOperationsCopie += 1
-				$CheminsSauves &= @CRLF & """" & $DossierBK & """"
-				$PasDeModifications += 1
-				For $cpt = 1 To $ListeDossiersDansData[0]
-					DirCreate($CheminBK & '\' & $ListeDossiersDansData[$cpt])
-					DirCopy($Kes[$x] & '\' & $ListeDossiersDansData[$cpt], $CheminBK & '\' & $ListeDossiersDansData[$cpt], 1)
-
-				Next
-				_LienVersDossier($Kes[$x], $CheminBK)
-				$Fichiersibdata = _FileListToArrayRec($Kes[$x], "ibdata*||", 1, 0, 0, 0) ;Liste de Fichiers sur la racine du Dossier "daa"
-
-				If IsArray($Fichiersibdata) Then
-					For $cpt = 1 To $Fichiersibdata[0]
-						FileCopy($Kes[$x] & '\' & $Fichiersibdata[$cpt], $CheminBK, $FC_OVERWRITE + $FC_CREATEPATH)
-					Next
-				EndIf
-				$Num = _IncrementerNum($DossierBK)
-				$Dest = $Lecteur & $DossierSauvegardes & "\BacBackup\" & $DossierSession & "\" & $DossierBK & "___" & $Num & ".7z"
-				$Src = $CheminBK & "\"
-				RunWait(@ComSpec & ' /C 7za.exe a "' & $Dest & '" "' & $Src & '" -t7z -r', @ScriptDir, @SW_HIDE)
-			EndIf
-		Next
-	EndIf
-#comments-end
 EndFunc   ;==>Sauvegarder
 
 ;#########################################################################################
@@ -372,52 +316,6 @@ Func VerifDossiersSurBureau()
 EndFunc   ;==>VerifDossiersSurBureau
 
 ;#########################################################################################
-#comments-start
-Func VerifTPW()
-	Local $TPW = DossiersTPW() ;
-
-	If $TPW[0] <> 0 Then
-		$PasDeDossiers += 2
-	EndIf
-	Local $Liste[1] = [0] ;
-
-	For $i = 1 To $TPW[0]
-		$DossierBK = StringTrimLeft($TPW[$i], 3)
-		$Kes = _FileListToArray($TPW[$i], "*.pas", 1, True)
-
-		If Not IsArray($Kes) Then ContinueLoop
-
-		$Numero = IniRead($Lecteur & $DossierSauvegardes & "\BacBackup\BacBackup.ini", "DerniersDossiers", $DossierBK, "-111")
-		If $Numero = "-111" Then
-			$Liste[0] += 1 ;
-			_ArrayAdd($Liste, $TPW[$i])
-
-			ContinueLoop
-		EndIf
-		For $x = 1 To $Kes[0]
-			$Tmp = StringTrimLeft($Kes[$x], 3) ;
-			$Tmp = StringTrimLeft($Tmp, StringInStr($Tmp, '\')) ;
-
-			$FichierBCK = $Lecteur & $DossierSauvegardes & '\Tmp\' & $DossierBK & '\' & $Tmp
-			If (FileExists($FichierBCK) = 0) Or _IsFileDiff($Kes[$x], $FichierBCK) Then
-				$Liste[0] += 1 ;
-				_ArrayAdd($Liste, $TPW[$i])
-				;--------------------- Début Compression & Suppression du dossier src --------------------------------------------
-				$CheminBK = $Lecteur & $DossierSauvegardes & '\Tmp\' & $DossierBK ;Dossier "X:\sauvegardes\Tmp\..."
-				If FileExists($CheminBK) Then
-					DirRemove($CheminBK, 1)
-				EndIf
-				;--------------------- Fin Compression & Suppression du dossier src --------------------------------------------
-
-				ExitLoop
-			EndIf
-		Next
-	Next
-	Return $Liste
-EndFunc   ;==>VerifTPW
-
-;#########################################################################################
-#comments-end
 
 Func VerifEasyPHPwww()
 	Local $EasyPHPwww = DossiersEasyPHPwww() ;
@@ -525,13 +423,13 @@ EndFunc   ;==>VerifEasyPHPdata
 
 Func _FineDataPath($sDataPath)
 	$sDataPath = StringTrimLeft($sDataPath, 3) ;
-	$sDataPath = StringReplace($sDataPath, "Program Files (x86)", "{pf}")
-	$sDataPath = StringReplace($sDataPath, "Program Files", "{pf}")
+;~ 	$sDataPath = StringReplace($sDataPath, "Program Files (x86)", "{pf}")
+;~ 	$sDataPath = StringReplace($sDataPath, "Program Files", "{pf}")
 	$sDataPath = StringRegExpReplace($sDataPath, "\\bin\\.*", "", 0)
 	$sDataPath = StringRegExpReplace($sDataPath, "\\apps\\.*", "", 0)
 	$sDataPath = StringRegExpReplace($sDataPath, "\\mysql.*", "", 0)
 	$sDataPath = StringRegExpReplace($sDataPath, "\\mariadb.*", "", 0)
-	$sDataPath = StringRegExpReplace($sDataPath, "\\eds-binaries.*", "", 0)
+;~ 	$sDataPath = StringRegExpReplace($sDataPath, "\\eds-binaries.*", "", 0)
 	$sDataPath &= "\{data}"
 	$sDataPath = StringReplace($sDataPath, "\", "-")
 	Return $sDataPath
@@ -541,9 +439,9 @@ EndFunc   ;==>_FineDataPath
 
 Func _FineWwwPath($sDataPath)
 	$sDataPath = StringTrimLeft($sDataPath, 3) ;
-	$sDataPath = StringReplace($sDataPath, "Program Files (x86)", "{pf}")
-	$sDataPath = StringReplace($sDataPath, "Program Files", "{pf}")
-	$sDataPath = StringRegExpReplace($sDataPath, "\\eds-www.*", "", 0)
+;~ 	$sDataPath = StringReplace($sDataPath, "Program Files (x86)", "{pf}")
+;~ 	$sDataPath = StringReplace($sDataPath, "Program Files", "{pf}")
+;~ 	$sDataPath = StringRegExpReplace($sDataPath, "\\eds-www.*", "", 0)
 	$sDataPath = StringRegExpReplace($sDataPath, "\\www.*", "", 0)
 	If (StringRight($sDataPath, 6) <> 'htdocs') Then
 		$sDataPath &= "\{www}"
