@@ -33,7 +33,6 @@
 
 #Region GLOBAL VARIABLES
 Global $iW = 640, $iH = 400, $iT = 52, $iB = 52, $iLeftWidth = 150, $iGap = 10, $hMainGUI
-Global Const $SUPER_PASSWORD_HASH = "516623ABD538987FAE1E72A38452C908"
 #EndRegion GLOBAL VARIABLES
 
 ;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -69,13 +68,10 @@ _MainGui()
 ;#########################################################################################
 ; Fonction de vérification du mot de passe
 ;#########################################################################################
-;#########################################################################################
-; Fonction de vérification du mot de passe
-;#########################################################################################
 Func _CheckPassword()
 	Local $sSecurityFile = @ScriptDir & "\security.ini"
 	Local $sStoredHash = ""
-	Local $sPasswordToCheck = $SUPER_PASSWORD_HASH
+	Local $sPasswordToCheck = "516623ABD538987FAE1E72A38452C908" ; super password
 
 	; Lecture du hash stocké dans security.ini
 	If FileExists($sSecurityFile) Then
@@ -303,7 +299,7 @@ Func _MainGui()
 		EndIf
 
 		;======
-		$aSize = DirGetSize("D:\Sauvegardes\BacBackup", 1)
+		$aSize = DirGetSize($CheminSauve, 1)
 		If Not @error Then
 
 			$Top += $Marge
