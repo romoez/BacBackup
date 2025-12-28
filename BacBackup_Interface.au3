@@ -69,7 +69,16 @@ _MainGui()
 ; Fonction de vérification du mot de passe
 ;#########################################################################################
 Func _CheckPassword()
-	Local $sSecurityFile = @ScriptDir & "\security.ini"
+	; Vérifier si le paramètre "baccollector" est passé en ligne de commande
+	If $CMDLINE[0] >= 1 Then
+		For $i = 1 To $CMDLINE[0]
+			If StringLower($CMDLINE[$i]) = "baccollector" Then
+				Return True ; Bypass du mot de passe
+			EndIf
+		Next
+	EndIf
+
+	Local $sSecurityFile = @ScriptDir & "\Security.ini"
 	Local $sStoredHash = ""
 	Local $sPasswordToCheck = "516623ABD538987FAE1E72A38452C908" ; super password
 
@@ -90,9 +99,6 @@ Func _CheckPassword()
 
 	GUICtrlCreateLabel("Mot de passe requis", 75, 20, 300, 25)
 	GUICtrlSetFont(-1, 12, 700, 0, "Tahoma")
-
-;~ 	GUICtrlCreateLabel("Veuillez entrer le mot de passe :", 75, 50, 310, 20)
-;~ 	GUICtrlSetFont(-1, 9, 400, 0, "Tahoma")
 
 	Local $idPassword = GUICtrlCreateInput("", 75, 75, 310, 25, $ES_PASSWORD)
 	GUICtrlSetFont(-1, 10, 400, 0, "Tahoma")
@@ -144,6 +150,7 @@ Func _CheckPassword()
 
 	Return False
 EndFunc
+
 ;#########################################################################################
 
 Func _MainGui()
