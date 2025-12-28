@@ -1,76 +1,236 @@
 #include-once
-#include <WinAPIFiles.au3>
 #include <Array.au3>
 #include <File.au3>
 #include <WinAPIFiles.au3>
 
 Global $UserLocal = _GetUserLocal()
-Global Const $FREE_SPACE_DRIVE_BACKUP = 5000 ;en MB
+; Au moins 15 Go d'espace libre pour garantir que Windows peut fonctionner correctement
+Global Const $MINIMUM_WINDOWS_FREE_SPACE = 15000 ; en MB
+; 5 Go minimum requis pour un lecteur non-système
+Global Const $FREE_SPACE_DRIVE_BACKUP = 5000 ; en MB
+; Cache global pour les installations XAMPP-LITE/XAMPP/WAMP
+Global $__g_aEasyPHPRootsCache = 0
 
-;#########################################################################################
+; ============================================================================
+Func DossiersBac($FullPath = 1) ; 1:Chemins complets, 0:Chemins relatifs
+    Local $aResult = _FileListToArray( _
+        StringLeft(@WindowsDir, 2), _
+        "bac*2*", _
+        $FLTAR_FOLDERS + $FLTAR_NOHIDDEN + $FLTAR_NOSYSTEM + $FLTAR_NOLINK, _
+        $FullPath ? $FLTAR_FULLPATH : $FLTAR_RELPATH)
 
-Func DossiersBac($Path = 1) ; 1:Chemins complets, 0:Chemins relatifs
-;~ 	dans certain cas @HomeDrive retoune une chaîne vide --> remplacée par : StringLeft(@WindowsDir,2)
-	Local $Bac = _FileListToArray(StringLeft(@WindowsDir,2), "bac*2*", 2, $Path)
-	Local $Liste[1] = [0] ;
-
-	If IsArray($Bac) Then
-		$Liste[0] += $Bac[0] ;
-		_ArrayDelete($Bac, 0)
-		_ArrayAdd($Liste, $Bac) ;
-	EndIf
-	Return $Liste
-EndFunc   ;==>DossiersBac
-
-;#########################################################################################
-
+    If Not IsArray($aResult) Then Return _EmptyArray()
+    Return $aResult
+EndFunc
+; ============================================================================
 Func _DossiersTravailEleves($FullPath = 1) ; 1:Chemins complets, 0:Chemins relatifs
-	Local $AutresClasses = _FileListToArrayRec(StringLeft(@WindowsDir,2), "1*;2*;3*;4*;7*;8*;9*;bac*;dc*;ds*", 30, 0, 2, $FullPath + 1)
-	Local $Liste[1] = [0] ;
+    Local $aResult = _FileListToArrayRec(StringLeft(@WindowsDir, 2), _
+        "1*;2*;3*;4*;7*;8*;9*;bac*2*;dc*;ds*", _
+        $FLTAR_FOLDERS + $FLTAR_NOHIDDEN + $FLTAR_NOSYSTEM + $FLTAR_NOLINK, _
+        $FLTAR_NORECUR, $FLTAR_FASTSORT, $FullPath ? $FLTAR_FULLPATH : $FLTAR_RELPATH)
 
+    If Not IsArray($aResult) Then Return _EmptyArray()
+    Return $aResult
+EndFunc
 
-	If IsArray($AutresClasses) Then
-		$Liste[0] += $AutresClasses[0] ;
-		_ArrayDelete($AutresClasses, 0)
-		_ArrayAdd($Liste, $AutresClasses) ;
-	EndIf
-	Return $Liste
-EndFunc   ;==>_DossiersTravailEleves
-
-;#########################################################################################
-
+; ============================================================================
 Func _DossiersSurBureau($FullPath = 1) ; 1:Chemins complets, 0:Chemins relatifs
-	Local $AutresClasses = _FileListToArrayRec(@DesktopDir, "1*;2*;3*;4*;7*;8*;9*;bac*;dc*;ds*", 30, 0, 2, $FullPath + 1)
-	Local $Liste[1] = [0] ;
-	If IsArray($AutresClasses) Then
-		$Liste[0] += $AutresClasses[0] ;
-		_ArrayDelete($AutresClasses, 0)
-		_ArrayAdd($Liste, $AutresClasses) ;
-	EndIf
-	Return $Liste
-EndFunc   ;==>_DossiersSurBureau
+    Local $aResult = _FileListToArrayRec(@DesktopDir, _
+        "1*;2*;3*;4*;7*;8*;9*;bac*2*;dc*;ds*", _
+        $FLTAR_FOLDERS + $FLTAR_NOHIDDEN + $FLTAR_NOSYSTEM + $FLTAR_NOLINK, _
+        $FLTAR_NORECUR, $FLTAR_FASTSORT, $FullPath ? $FLTAR_FULLPATH : $FLTAR_RELPATH)
 
+    If Not IsArray($aResult) Then Return _EmptyArray()
+    Return $aResult
+EndFunc
+
+; ============================================================================
+; Initialise le cache des installations WAMP/XAMPP
+Func DossiersEasyPHPwww($FullPath = 1) ; 1:Chemins complets, 0:Chemins relatifs
+    Local $aEasyPHP
+
+    ; Récupère depuis le cache ou effectue le scan
+    If IsArray($__g_aEasyPHPRootsCache) Then
+        $aEasyPHP = $__g_aEasyPHPRootsCache
+    Else
+        $aEasyPHP = _FileListToArrayRec( _
+            StringLeft(@WindowsDir, 2), _
+            "wamp*;xampp*", _
+            $FLTAR_FOLDERS + $FLTAR_NOHIDDEN + $FLTAR_NOSYSTEM + $FLTAR_NOLINK, _
+            $FLTAR_NORECUR, _
+            $FLTAR_FASTSORT, _
+            $FullPath ? $FLTAR_FULLPATH : $FLTAR_RELPATH)
+
+        ; Stocke dans le cache même si vide
+        If Not IsArray($aEasyPHP) Then
+            $__g_aEasyPHPRootsCache = _EmptyArray()
+            Return _EmptyArray()
+        EndIf
+        $__g_aEasyPHPRootsCache = $aEasyPHP
+    EndIf
+
+    If $aEasyPHP[0] = 0 Then Return _EmptyArray()
+
+    ; Construction du tableau résultat
+    Local $aResult[$aEasyPHP[0] + 1]
+    Local $iCount = 0
+
+    For $i = 1 To $aEasyPHP[0]
+        Local $sFolder = $aEasyPHP[$i]
+
+        If FileExists($sFolder & '\www') Then
+            $iCount += 1
+            $aResult[$iCount] = $sFolder & '\www'
+        ElseIf FileExists($sFolder & '\htdocs') Then
+            $iCount += 1
+            $aResult[$iCount] = $sFolder & '\htdocs'
+        EndIf
+    Next
+
+    If $iCount = 0 Then Return _EmptyArray()
+
+    ReDim $aResult[$iCount + 1]
+    $aResult[0] = $iCount
+    Return $aResult
+EndFunc
+
+; ============================================================================
+; Utilise le cache et l'invalide après usage
+Func DossiersEasyPHPdata($FullPath = 1) ; 1:Chemins complets, 0:Chemins relatifs
+    Local $aEasyPHP
+
+    ; Récupère le cache préparé par DossiersEasyPHPwww
+    If IsArray($__g_aEasyPHPRootsCache) Then
+        $aEasyPHP = $__g_aEasyPHPRootsCache
+        $__g_aEasyPHPRootsCache = 0 ; Invalidation immédiate
+    Else
+        ; Fallback si appelé sans DossiersEasyPHPwww
+        $aEasyPHP = _FileListToArrayRec( _
+            StringLeft(@WindowsDir, 2), _
+            "wamp*;xampp*", _
+            $FLTAR_FOLDERS + $FLTAR_NOHIDDEN + $FLTAR_NOSYSTEM + $FLTAR_NOLINK, _
+            $FLTAR_NORECUR, _
+            $FLTAR_FASTSORT, _
+            $FullPath ? $FLTAR_FULLPATH : $FLTAR_RELPATH)
+
+        If Not IsArray($aEasyPHP) Then Return _EmptyArray()
+    EndIf
+
+    If $aEasyPHP[0] = 0 Then Return _EmptyArray()
+
+    ; Pré-allocation pour MySQL + MariaDB par installation
+    Local $aResult[$aEasyPHP[0] * 2 + 1]
+    Local $iCount = 0
+
+    For $i = 1 To $aEasyPHP[0]
+        Local $sBase = $aEasyPHP[$i]
+        Local $sDataPath
+
+        ; XAMPP Lite
+        $sDataPath = $sBase & '\apps\mysql\data'
+        If FileExists($sDataPath) Then
+            $iCount += 1
+            $aResult[$iCount] = $sDataPath
+            ContinueLoop
+        EndIf
+
+        ; EasyPHP/XAMPP standard
+        $sDataPath = $sBase & '\mysql\data'
+        If FileExists($sDataPath) Then
+            $iCount += 1
+            $aResult[$iCount] = $sDataPath
+            ContinueLoop
+        EndIf
+
+        ; WampServer MySQL
+        If FileExists($sBase & '\bin\mysql') Then
+            $sDataPath = _FindDataFldr($sBase & '\bin\mysql')
+            If $sDataPath <> "" Then
+                $iCount += 1
+                $aResult[$iCount] = $sDataPath
+            EndIf
+        EndIf
+
+        ; WampServer MariaDB
+        If FileExists($sBase & '\bin\mariadb') Then
+            $sDataPath = _FindDataFldr($sBase & '\bin\mariadb')
+            If $sDataPath <> "" Then
+                $iCount += 1
+                $aResult[$iCount] = $sDataPath
+            EndIf
+        EndIf
+    Next
+
+    If $iCount = 0 Then Return _EmptyArray()
+
+    ReDim $aResult[$iCount + 1]
+    $aResult[0] = $iCount
+    Return $aResult
+EndFunc
+
+; ============================================================================
+; Recherche le dossier data dans les installations WampServer versionnées
+; Exemple: C:\wamp64\bin\mysql\mysql8.0.34\data
+Func _FindDataFldr($PathEasy)
+    Local $hSearch = FileFindFirstFile($PathEasy & "\*")
+    If $hSearch = -1 Then Return ""
+
+    Local $sEntry, $sCandidate
+    While 1
+        $sEntry = FileFindNextFile($hSearch)
+        If @error Then ExitLoop
+
+        ; Vérifie les dossiers versionnés (mysql*, mariadb*)
+        If StringRegExp($sEntry, "(?i)^(mysql|mariadb)", 0) Then
+            $sCandidate = $PathEasy & "\" & $sEntry & "\data"
+            If FileExists($sCandidate) Then
+                FileClose($hSearch)
+                Return $sCandidate
+            EndIf
+        EndIf
+    WEnd
+
+    FileClose($hSearch)
+    Return ""
+EndFunc
+
+; ============================================================================
+Func _EmptyArray()
+    Local $aEmpty[1] = [0]
+    Return $aEmpty
+EndFunc
 ;#########################################################################################
 
 Func LecteurSauvegarde()
-	Local $aDrive = DriveGetDrive('FIXED')
-    Local $HomeDrive = StringLeft(@WindowsDir,2)
-	; $Lecteur = @HomeDrive ; "C:" ; $aDrive[1] ; $aDrive[1] peut être A: !!
-	$Lecteur = $HomeDrive ; "C:" ; $aDrive[1] ; $aDrive[1] peut être A: !!
-	For $i = 1 To $aDrive[0]
-		If $aDrive[$i] = $HomeDrive Then ContinueLoop
-		If (DriveGetType($aDrive[$i], $DT_BUSTYPE) <> "USB") _ ; pour Exclure les hdd externes
-				And _WinAPI_IsWritable($aDrive[$i]) _
-				And DriveSpaceFree($aDrive[$i] & "\") > $FREE_SPACE_DRIVE_BACKUP _ ;1Go
-				Then
-			$Lecteur = $aDrive[$i]
-			ExitLoop
-		EndIf
-	Next
-	$Lecteur = $Lecteur & "\"
-	Return $Lecteur
-EndFunc   ;==>LecteurSauvegarde
+    Local $aDrives = DriveGetDrive('FIXED')
+    Local $sHomeDrive = StringLeft(@WindowsDir, 2) ; dans certains cas @HomeDrive retourne une chaîne vide
 
+    ; Si aucun lecteur fixe détecté, retourne le lecteur système
+    If Not IsArray($aDrives) Then Return StringUpper($sHomeDrive) & "\"
+
+    ; Vérifie d'abord si le lecteur système a assez d'espace
+    If DriveSpaceFree($sHomeDrive & "\") > $MINIMUM_WINDOWS_FREE_SPACE Then
+        Return StringUpper($sHomeDrive) & "\"
+    EndIf
+
+    ; Cherche un autre lecteur avec plus d'espace
+    For $i = 1 To $aDrives[0]
+        Local $sDrive = $aDrives[$i]
+
+        ; Ignore le lecteur système (déjà testé)
+        If $sDrive = $sHomeDrive Then ContinueLoop
+
+        ; Vérifie les critères : non-USB, accessible en écriture, espace suffisant
+        If DriveGetType($sDrive, $DT_BUSTYPE) <> "USB" _
+            And _WinAPI_IsWritable($sDrive) _
+            And DriveSpaceFree($sDrive & "\") > $FREE_SPACE_DRIVE_BACKUP Then
+            Return StringUpper($sDrive) & "\"
+        EndIf
+    Next
+
+    ; Aucun lecteur valide trouvé, retourne le lecteur système par défaut
+    Return StringUpper($sHomeDrive) & "\"
+EndFunc
 ;#########################################################################################
 
 Func _IntervalleInterSauvegardesEnMinutes()
@@ -81,141 +241,6 @@ Func _IntervalleInterSauvegardesEnMinutes()
 	EndIf
 	Return $IntervalleInterSauvegardes
 EndFunc   ;==>_IntervalleInterSauvegardesEnMinutes
-
-;#########################################################################################
-
-#comments-start
-Func DossiersTPW($Path = 1) ; 1:Chemins complets, 0:Chemins relatifs
-    Local $HomeDrive = StringLeft(@WindowsDir,2)
-	Local $TPW = _FileListToArray($HomeDrive, "TPW*", 2, $Path)
-	Local $Liste[1] = [0] ;
-
-	If IsArray($TPW) Then
-		$Liste[0] += $TPW[0] ;
-		_ArrayDelete($TPW, 0)
-		_ArrayAdd($Liste, $TPW) ;
-	EndIf
-	Return $Liste
-EndFunc   ;==>DossiersTPW
-#comments-end
-;#########################################################################################
-
-Func DossiersEasyPHPwww($FullPath = 1) ; 1:Chemins complets, 0:Chemins relatifs
-	Local $aEasyPHP[1] = [0]
-
-	Local $aTmpEasyPHP = _FileListToArrayRec(StringLeft(@WindowsDir,2), "EasyPHP*;wamp*;xampp*;apachefriends*", 30, 0, 2, $FullPath + 1)
-
-	If IsArray($aTmpEasyPHP) Then
-		$aEasyPHP[0] += $aTmpEasyPHP[0]
-		_ArrayDelete($aTmpEasyPHP, 0)
-		_ArrayAdd($aEasyPHP, $aTmpEasyPHP)
-	EndIf
-
-	Local $aTmpEasyPHP = _FileListToArray(@ProgramFilesDir, "EasyPHP*", 2, $FullPath)
-
-	If IsArray($aTmpEasyPHP) Then
-		$aEasyPHP[0] += $aTmpEasyPHP[0]
-		_ArrayDelete($aTmpEasyPHP, 0)
-		_ArrayAdd($aEasyPHP, $aTmpEasyPHP)
-	EndIf
-
-	Local $Liste[1] = [0]
-	Local $Liste[1] = [0], $www
-
-
-	If IsArray($aEasyPHP) Then
-		For $i = 1 To $aEasyPHP[0]
-			If (FileExists($aEasyPHP[$i] & '\www')) Then
-				$Liste[0] += 1     ;
-				_ArrayAdd($Liste, $aEasyPHP[$i] & '\www')     ;
-			ElseIf (FileExists($aEasyPHP[$i] & '\eds-www')) Then
-				$Liste[0] += 1         ;
-				_ArrayAdd($Liste, $aEasyPHP[$i] & '\eds-www')         ;
-			ElseIf (FileExists($aEasyPHP[$i] & '\data\localweb')) Then
-				$Liste[0] += 1             ;
-				_ArrayAdd($Liste, $aEasyPHP[$i] & '\data\localweb')
-			ElseIf (FileExists($aEasyPHP[$i] & '\htdocs')) Then
-				$Liste[0] += 1                 ;
-				_ArrayAdd($Liste, $aEasyPHP[$i] & '\htdocs')
-			ElseIf (FileExists($aEasyPHP[$i] & '\xampp\htdocs')) Then
-				$Liste[0] += 1                 ;
-				_ArrayAdd($Liste, $aEasyPHP[$i] & '\xampp\htdocs')
-			EndIf
-		Next
-	EndIf
-
-	Return $Liste
-EndFunc   ;==>DossiersEasyPHPwww
-
-;#########################################################################################
-
-Func DossiersEasyPHPdata($FullPath = 1) ; 1:Chemins complets, 0:Chemins relatifs
-	Local $aEasyPHP[1] = [0]
-	Local $aTmpEasyPHP = _FileListToArrayRec(StringLeft(@WindowsDir,2), "EasyPHP*;wamp*;xampp*;apachefriends*", 30, 0, 2, $FullPath + 1)
-
-	If IsArray($aTmpEasyPHP) Then
-		$aEasyPHP[0] += $aTmpEasyPHP[0]
-		_ArrayDelete($aTmpEasyPHP, 0)
-		_ArrayAdd($aEasyPHP, $aTmpEasyPHP)
-	EndIf
-
-	Local $aTmpEasyPHP = _FileListToArray(@ProgramFilesDir, "EasyPHP*", 2, $FullPath)
-
-	If IsArray($aTmpEasyPHP) Then
-		$aEasyPHP[0] += $aTmpEasyPHP[0]
-		_ArrayDelete($aTmpEasyPHP, 0)
-		_ArrayAdd($aEasyPHP, $aTmpEasyPHP)
-	EndIf
-
-	Local $Liste[1] = [0], $data
-
-	If IsArray($aEasyPHP) Then
-		For $i = 1 To $aEasyPHP[0]
-			$data = $aEasyPHP[$i] & '\apps\mysql\data'  ;xampp-lite
-			If FileExists($data) Then
-				$Liste[0] += 1 ;
-				_ArrayAdd($Liste, $data) ;
-			ElseIf FileExists($aEasyPHP[$i] & '\binaries\mysql\data') Then ;EasyPHP 13.x & 14.x
-				$Liste[0] += 1 ;
-				_ArrayAdd($Liste, $aEasyPHP[$i] & '\binaries\mysql\data') ;
-			ElseIf FileExists($aEasyPHP[$i] & '\mysql\data') Then ;easyphp < 7 & xampp
-				$Liste[0] += 1 ;
-				_ArrayAdd($Liste, $aEasyPHP[$i] & '\mysql\data') ;
-			ElseIf FileExists($aEasyPHP[$i] & '\eds-binaries\dbserver')  Then ;EasyPHP 15.x & 16.x & 17.x
-				$data = _FindDataFldr($aEasyPHP[$i] & '\eds-binaries\dbserver')  ;EasyPHP 15.x & 16.x & 17.x
-				If FileExists($data) Then
-					$Liste[0] += 1 ;
-					_ArrayAdd($Liste, $data) ;
-				EndIf
-			Else
-				If (FileExists($aEasyPHP[$i] & '\bin\mysql')) Then ;Wamp
-					$data = _FindDataFldr($aEasyPHP[$i] & '\bin\mysql')
-					If FileExists($data) Then
-						$Liste[0] += 1 ;
-						_ArrayAdd($Liste, $data) ;
-					EndIf
-				EndIf
-			    If (FileExists($aEasyPHP[$i] & '\bin\mariadb')) Then ;Wamp
-					$data = _FindDataFldr($aEasyPHP[$i] & '\bin\mariadb')
-					If FileExists($data) Then
-						$Liste[0] += 1 ;
-						_ArrayAdd($Liste, $data) ;
-					EndIf
-				EndIf
-			EndIf
-		Next
-	EndIf
-	Return $Liste
-EndFunc   ;==>DossiersEasyPHPdata
-
-;#########################################################################################
-
-Func _FindDataFldr($PathEasy)
-	Local $aSearch = _FileListToArrayRec($PathEasy, "data", 2, 1, 0, 2)
-	If IsArray($aSearch) Then Return $aSearch[1]
-
-	Return 0
-EndFunc   ;==>_FindDataFldr
 
 ;#########################################################################################
 
@@ -232,19 +257,36 @@ Func _KillOtherScript()
 EndFunc   ;==>_KillOtherScript
 
 ;#########################################################################################
-
 Func _LockFolder($Dossier)
-	If FileExists($Dossier) = 0 Then Return SetError(1, 0, -1)
-	RunWait('"' & @ComSpec & '" /c cacls.exe "' & $Dossier & '" /E /P "' & @UserName & '":N', '', @SW_HIDE)
-EndFunc   ;==>_LockFolder
+    If Not FileExists($Dossier) Then Return SetError(1, 0, -1)
 
+    Local $sCmd
+    ; Utilise cacls.exe sous Windows 7, icacls.exe pour les versions ultérieures
+    If @OSVersion = "WIN_7" Then
+        $sCmd = 'cacls.exe "' & $Dossier & '" /E /P "' & @UserName & '":N > NUL 2>&1'
+    Else
+        $sCmd = 'icacls.exe "' & $Dossier & '" /deny "' & @UserName & '":(F) /c > NUL 2>&1'
+    EndIf
+
+    RunWait(@ComSpec & ' /c ' & $sCmd, "", @SW_HIDE)
+EndFunc
 ;#########################################################################################
 
 Func _UnlockFolder($Dossier)
-	If FileExists($Dossier) = 0 Then Return SetError(1, 0, -1)
-	RunWait('"' & @ComSpec & '" /c cacls.exe "' & $Dossier & '" /E /P "' & @UserName & '":F', '', @SW_HIDE)
-EndFunc   ;==>_UnlockFolder
+    If Not FileExists($Dossier) Then Return SetError(1, 0, -1)
 
+    Local $sCmd
+    ; Utilise cacls.exe sous Windows 7, icacls.exe pour les versions ultérieures
+    If @OSVersion = "WIN_7" Then
+        $sCmd = 'cacls.exe "' & $Dossier & '" /E /P "' & @UserName & '":F > NUL 2>&1'
+    Else
+        ; Supprime toutes les permissions de l'utilisateur puis accorde un contrôle total
+        $sCmd = 'icacls.exe "' & $Dossier & '" /remove "' & @UserName & '" > NUL 2>&1 & ' & _
+                'icacls.exe "' & $Dossier & '" /grant "' & @UserName & '":F > NUL 2>&1'
+    EndIf
+
+    RunWait(@ComSpec & ' /c ' & $sCmd, "", @SW_HIDE)
+EndFunc
 ;#########################################################################################
 
 Func _GetUserLocal()
@@ -400,33 +442,33 @@ EndFunc   ;==>_MD5ForFile
 Func _CRC32ForString($sString)
     ; 1. Convert string to UTF-8 binary format
     Local $bBinary = StringToBinary($sString, 4) ; 4 = UTF-8 encoding
-    
+
     ; 2. Get the actual size in bytes (BinaryLen) instead of character count (StringLen).
-    ; This is crucial because in UTF-8, special characters (like accents or emojis) 
+    ; This is crucial because in UTF-8, special characters (like accents or emojis)
     ; can use more than 1 byte, while StringLen would only count them as 1.
     Local $iByteLen = BinaryLen($bBinary)
-    
+
     ; If the string is empty, return the CRC32 for an empty buffer
     If $iByteLen = 0 Then Return Hex(0, 8)
-    
+
     ; 3. Create a memory structure to hold the bytes for the DLL call
     Local $tData = DllStructCreate("byte[" & $iByteLen & "]")
     If @error Then Return SetError(1, 0, "") ; Memory allocation failed
-    
+
     DllStructSetData($tData, 1, $bBinary)
-    
+
     ; 4. Call RtlComputeCrc32 from ntdll.dll (native Windows function)
     ; This is significantly faster than an AutoIt loop for CRC calculation.
     Local $a_iCall = DllCall("ntdll.dll", "dword", "RtlComputeCrc32", _
             "dword", 0, _ ; Initial CRC value
             "ptr", DllStructGetPtr($tData), _ ; Pointer to data
             "int", $iByteLen) ; Length in bytes
-    
+
     ; Check for DllCall errors
     If @error Or Not IsArray($a_iCall) Then
         Return SetError(1, 0, "")
     EndIf
-    
+
     ; 5. Return the result as a formatted 8-character hexadecimal string
     Local $iCRC32 = $a_iCall[0]
     Return SetError(0, 0, Hex($iCRC32, 8))
