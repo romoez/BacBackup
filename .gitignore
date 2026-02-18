@@ -1,8 +1,8 @@
 .vscode/
 
 Installer/
-!AideBacBackup
-AideBacBackup/*
+!Installer/BacBackup.iss
+AideBacBackup
 !AideBacBackup/AideBB.chm
 
 *_stripped.au3

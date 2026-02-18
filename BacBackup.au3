@@ -1,18 +1,34 @@
-#NoTrayIcon
-#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
+;~ #NoTrayIcon
+#Region ;**** Directives AutoIt3Wrapper ****
 #AutoIt3Wrapper_Run_Au3Stripper=y
-#EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
+;~ #Au3Stripper_Parameters=/rm /mo /sf /sv
+#Au3Stripper_Parameters=/rm /sf /sv
+#AutoIt3Wrapper_UseUpx=n
+#EndRegion
 
+#Region ;**** Métadonnées de l'application ****
 #pragma compile(Icon, BacBackup.ico)
-#pragma compile(FileDescription, BacBackup Auto-Sauvegarde)
-#pragma compile(FileVersion, 2.3.0.501, 2.3.0.501)
+#pragma compile(FileDescription, BacBackup - Service de surveillance)
+#pragma compile(FileVersion, 2.5.26.218)
+#pragma compile(ProductVersion, 2.5.26.218)
 #pragma compile(ProductName, BacBackup)
-#pragma compile(ProductVersion, 2.3.0.501)
+#pragma compile(InternalName, BacBackup)
+#pragma compile(OriginalFilename, BacBackup.exe)
+#pragma compile(AutoItExecuteAllowed, false)
+#pragma compile(InputBoxRes, true)
+#pragma compile(Compatibility, vista, win7, win8, win10, win11)
+#pragma compile(Console, false)
+#EndRegion
 
-#pragma compile(LegalCopyright, 2016-2025 © La Communauté Tunisienne des Enseignants d'Informatique)
-#pragma compile(Comments,'BacBackup - Module de Surveillance')
+#Region ;**** Informations légales ****
+#pragma compile(LegalCopyright, © 2016-2026 Communauté Tunisienne des Enseignants d'Informatique)
+#pragma compile(Comments, Module de sauvegarde automatique - Exécuté par le service principal BacBackup)
+#pragma compile(CompanyName, CTEI - Communauté Tunisienne des Enseignants d'Informatique)
+#EndRegion
+
+#Region ;**** Configuration de sortie ****
 #pragma compile(Out, Installer\Files\BacBackup.exe)
-#pragma compile(CompanyName, La Communauté Tunisienne des Enseignants d'Informatique)
+#EndRegion
 
 #include <ScreenCapture.au3>
 #include <WinAPIFiles.au3>
@@ -21,12 +37,16 @@
 #include <GUIConstantsEx.au3>
 #include <FileConstants.au3>
 #include <String.au3>
+#include <Misc.au3>
+#include <TrayConstants.au3>
 
 ;---------------------------------------------------Variables Globales-Début
 Global $scrnsave ; Définie dans Initialisation()
 Global $IntervalleInterSauvegardes ; Définie dans Initialisation()
 Global $IntervalleInterCaptures
 Global $TaillMaxDossierSessionEnGO = 1 ; GigaOctets
+Global Const $MAX_CAPTURES_ECRAN = 1000
+Global Const $INACTIVITY_THRESHOLD_MS = 30 * 60 * 1000  ; 30 minutes
 Global $DossierSession
 
 ; Variables pour la surveillance du presse-papier
@@ -35,6 +55,31 @@ Global $sClipboardLogFile
 Global Const $MAX_TEXT_SIZE = 100000 ; 100 Ko max pour le texte
 Global Const $DEBOUNCE_TIME = 500 ; 500ms pour éviter les doublons rapides
 Global $iLastClipboardTime = 0 ; Dernier traitement du presse-papier
+
+; ******************************************************************
+Global $g_iLastCaptureTime = 0 ; Temps de la dernière capture réussie
+Global $g_iTotalCaptures = 0 ; Nombre total de captures dans cette session
+Global $Lecteur
+Global Const $DossierSauvegardes = "Sauvegardes"
+
+; ******************************************************************
+Global $g_LastInputTick = 0 ; pour détection veille
+; Initialiser le tick de dernière activité
+Global $tLastInput = DllStructCreate("dword;dword")
+DllCall("user32.dll", "bool", "GetLastInputInfo", "ptr", DllStructGetPtr($tLastInput))
+$g_LastInputTick = DllStructGetData($tLastInput, 2)
+Global $g_bPendingNewSessionAfterIdle = False
+Global $g_LongIdleDuration = 0 ; variable pour stocker la durée de l'inactivité
+
+; Variables pour la surveillance USB
+Global Const $DBT_DEVICEARRIVAL = 0x00008000
+Global Const $DBT_DEVICECOMPLETEREMOVAL = 0x00008004
+;~ Global Const $WM_DEVICECHANGE = 0x0219
+Global $g_aDrives
+
+;~ Forcer le mode "DPI Aware" pour capturer la totalité de l'écran
+DllCall("user32.dll", "bool", "SetProcessDPIAware")
+
 ;---------------------------------------------------Variables Globales-Fin
 
 ;---------------------------------------------------Hotkeys-Début
@@ -57,124 +102,402 @@ _KillOtherScript()
 Initialisation()
 CleanUp()
 InitialiserSurveillancePressePapier()
+Opt("TrayOnEventMode", 1) ; Active le mode événement pour l'icône (ne bloque pas le script)
+Opt("TrayMenuMode", 1)    ; Désactive le menu par défaut (Pause/Exit) au clic droit
+TraySetToolTip("BacBackup - Surveillance active") ; Texte au survol de la souris
+; Associe le double-clic gauche à la fonction de gestion
+TraySetOnEvent($TRAY_EVENT_PRIMARYDOUBLE, "_GestionDoubleClicTray")
 main()
 
 ;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 ;@@@@@@@@@@@@@@     Fin Programme Principal    @@@@@@@@@@@@@@@@@@@@@@@
 ;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
 Func main()
-	Local $NbCaptures
-	Local $NombreTotalOperations = 0
-	While 1
-		$NbCaptures = 0
-		While $NbCaptures * $IntervalleInterCaptures < $IntervalleInterSauvegardes
-			$NbCaptures += 1
-			Sleep($IntervalleInterCaptures)
-			Capturer()
-			$NombreTotalOperations += 1
-			_ProcessWindowsMessages()
-		WEnd
-		If $NombreTotalOperations >= 2000 Then
-			If DirGetSize($DossierSession) / 1024 / 1024 / 1024 > $TaillMaxDossierSessionEnGO Then
-				CleanUp()
-				Initialisation()
-				$NombreTotalOperations = 0
+    Local $NbCapturesReelles = 0
+    Local $NombreTotalOperations = 0
+    Local $tStartCycle = 0
+    Local $bLongIdleTriggered = False
+
+    While 1
+        ; Boucle de surveillance (2 min par cycle)
+        $tStartCycle = TimerInit()
+        $NbCapturesReelles = 0
+		$scrnsave = _GetScreensaverName()
+
+        While TimerDiff($tStartCycle) < $IntervalleInterSauvegardes
+            Sleep($IntervalleInterCaptures)
+
+            ; Capturer() retourne 1/0 → on compte seulement les vraies captures
+            Local $iCaptureResult = Capturer()
+            $NbCapturesReelles += $iCaptureResult
+            $NombreTotalOperations += 1
+
+            ; Mettre à jour le temps de dernière capture si capture réussie
+            If $iCaptureResult = 1 Then
+                $g_iLastCaptureTime = TimerInit()
+                $bLongIdleTriggered = False ; Réinitialiser le flag si activité détectée
+            EndIf
+
+			If Mod($NombreTotalOperations, 4) = 0 Then ; Vérifier toutes les 4 itérations (~20s)
+				Local $sIniSessionName = IniRead($Lecteur & $DossierSauvegardes & "\BacBackup\BacBackup.ini", "Params", "DossierSession", "")
+				If StringInStr($sIniSessionName, "BacCollector") Then
+					CleanUp()
+					Initialisation("Nouvelle session initiée par BacCollector")
+					$g_iTotalCaptures = 0
+					$NombreTotalOperations = 0
+					$bLongIdleTriggered = False
+                    $sLastClipboardText = ""
+					$g_bPendingNewSessionAfterIdle = False
+                    ContinueLoop 2
+				EndIf
 			EndIf
-		EndIf
-		LancerSauvegardeNormale()
-		_ProcessWindowsMessages()
-	WEnd
-EndFunc   ;==>main
+            _ProcessWindowsMessages()
+        WEnd
+
+		; Cas 1 : trop de captures + dossier trop gros → nouvelle session
+        If $g_iTotalCaptures >= $MAX_CAPTURES_ECRAN Then
+            Local $tailleGO = DirGetSize($DossierSession) / 1024 / 1024 / 1024
+            If $tailleGO > $TaillMaxDossierSessionEnGO Then
+                CleanUp()
+                Initialisation("Limite atteinte : " & $g_iTotalCaptures & " captures, taille = " & Round($tailleGO, 2) & " Go")
+                $g_iTotalCaptures = 0
+                $NombreTotalOperations = 0
+                $bLongIdleTriggered = False
+				$g_bPendingNewSessionAfterIdle = False
+                ContinueLoop
+            EndIf
+        EndIf
+
+        ; Cas 2 : activité après long idle (>30 min) → marquer pour nouvelle session (à créer au moment de la reprise d'activité - dans Capturer())
+        Local $iIdleTime = _Timer_GetIdleTime()
+        If $iIdleTime > $INACTIVITY_THRESHOLD_MS Then
+            If Not $bLongIdleTriggered Then
+                $g_bPendingNewSessionAfterIdle = True
+                $bLongIdleTriggered = True
+            EndIf
+			$g_LongIdleDuration = $iIdleTime
+        Else
+            ; Réinitialiser le flag si l'utilisateur est actif
+            $bLongIdleTriggered = False
+        EndIf
+
+        ; Lancer la sauvegarde normale seulement si des captures ont été faites
+        If $NbCapturesReelles > 0 Then
+            LancerSauvegardeNormale()
+        EndIf
+
+        _ProcessWindowsMessages()
+    WEnd
+EndFunc
 
 ;#########################################################################################
 
-Func Initialisation()
-	$scrnsave = RegRead("HKEY_CURRENT_USER\Control Panel\Desktop", "SCRNSAVE.EXE")
-	$scrnsave = StringRight($scrnsave, StringLen($scrnsave) - StringInStr($scrnsave, "\", 0, -1))
+;#########################################################################################
 
-	$Lecteur = LecteurSauvegarde()
-	$DossierSauvegardes = "Sauvegardes"
-	If Not FileExists($Lecteur & $DossierSauvegardes) Then
-		DirCreate($Lecteur & $DossierSauvegardes)
-	EndIf
-	FileSetAttrib($Lecteur & $DossierSauvegardes, "+SH")
+Func Initialisation($Cause = "")
 
-	If Not FileExists($Lecteur & $DossierSauvegardes & "\BacBackup") Then
-		_UnLockFolder($Lecteur & $DossierSauvegardes)
-		DirCreate($Lecteur & $DossierSauvegardes & "\BacBackup")
-	EndIf
+    $Lecteur = LecteurSauvegarde()
+    ; Variables locales pour les chemins répétitifs
+    Local $sDossierBase = StringUpper($Lecteur) & $DossierSauvegardes
+    Local $sDossierBacBackup = $sDossierBase & "\BacBackup"
+    Local $sDossierBacCollector = $sDossierBase & "\BacCollector"
+    Local $sDossierTmp = $sDossierBase & "\Tmp"
 
-	IniWrite($Lecteur & $DossierSauvegardes & "\BacBackup\BacBackup.ini", "Params", "DossierSauvegardes", $DossierSauvegardes)
-	IniWrite($Lecteur & $DossierSauvegardes & "\BacBackup\BacBackup.ini", "Params", "Lecteur", StringUpper($Lecteur))
-	_LockFolder($Lecteur & $DossierSauvegardes)
+    Local $sIniPath = $sDossierBacBackup & "\BacBackup.ini"
+    ; Créer dossier de base
+    If Not FileExists($sDossierBase) Then
+        DirCreate($sDossierBase)
+    EndIf
 
-	Global $DossierSession = IniRead($Lecteur & $DossierSauvegardes & "\BacBackup\BacBackup.ini", "Params", "DossierSession", "")
-	$Tmp = StringLeft($DossierSession, 3)
-	If StringRegExp($Tmp, "([0-9]{3})", 0) = 0 Then
-		$Tmp = "001"
-	Else
-		$Tmp = $Tmp + 1
-		If $Tmp > 999 Then
-			$Tmp = "001"
-		EndIf
-	EndIf
-	$Tmp = "00" & $Tmp
-	$Tmp = StringRight($Tmp, 3)
+    ; Créer dossier BacBackup
+    If Not FileExists($sDossierBacBackup) Then
+		_UnlockFolder($sDossierBase)
+        DirCreate($sDossierBacBackup)
+    EndIf
+	_LockFolderContents($sDossierBacBackup)
 
-	$DossierSession = $Tmp & '___' & @MDAY & "_" & @MON & "_" & @YEAR & "___" & @HOUR & "h" & @MIN
-	IniWrite($Lecteur & $DossierSauvegardes & "\BacBackup\BacBackup.ini", "Params", "DossierSession", $DossierSession)
+    ; Créer dossier BacBackup
+    If Not FileExists($sDossierBacCollector) Then
+		_UnlockFolder($sDossierBase)
+        DirCreate($sDossierBacCollector)
+    EndIf
+	_LockFolderContents($sDossierBacCollector)
 
-	$DossierSession = StringUpper($Lecteur) & $DossierSauvegardes & "\BacBackup\" & $DossierSession
-	If Not FileExists($DossierSession) Then
-		DirCreate($DossierSession)
-	EndIf
-	If Not FileExists($DossierSession & "\0-CapturesÉcran") Then
-		DirCreate($DossierSession & "\0-CapturesÉcran")
-	EndIf
+    ; Créer dossier Tmp (utilisé par le module de Sauvegarde)
+    If Not FileExists($sDossierTmp) Then
+		_UnlockFolder($sDossierBase)
+        DirCreate($sDossierTmp)
+    EndIf
 
-	; Créer le fichier journal
-	$sClipboardLogFile = $DossierSession & "\_journal_presse_papier.log"
-	If Not FileExists($sClipboardLogFile) Then
-		Local $hFile = FileOpen($sClipboardLogFile, $FO_OVERWRITE + $FO_UTF8_NOBOM)
-		If $hFile <> -1 Then
-			FileWrite($hFile, "Journal du Presse-papier" & @CRLF & _
-					"Session: " & $DossierSession & @CRLF & _
-					"Début: " & @YEAR & "-" & @MON & "-" & @MDAY & " " & @HOUR & ":" & @MIN & ":" & @SEC & @CRLF & _
-					_StringRepeat("■", 80) & @CRLF & @CRLF)
-			FileClose($hFile)
-		EndIf
-	EndIf
+	; Vérrouiller le dossier C:\Sauvegarde après création des sous-dossiers
+	_LockRootFolder($sDossierBase)
 
-	$IntervalleInterSauvegardes = IniRead($Lecteur & $DossierSauvegardes & "\BacBackup\BacBackup.ini", "Params", "IntervalleInterSauvegardesEnMinutes", "")
-	If StringIsInt($IntervalleInterSauvegardes) = 0 Or $IntervalleInterSauvegardes < 1 Or $IntervalleInterSauvegardes > 15 Then
-		$IntervalleInterSauvegardes = 2 ;2 Minutes
-		IniWrite($Lecteur & $DossierSauvegardes & "\BacBackup\BacBackup.ini", "Params", "IntervalleInterSauvegardesEnMinutes", $IntervalleInterSauvegardes)
-	EndIf
-	$IntervalleInterSauvegardes = $IntervalleInterSauvegardes * 60000 ; (1 minute= 60000 millisecondes)
+    ; Écrire paramètres de base
+    IniWrite($sIniPath, "Params", "DossierSauvegardes", $DossierSauvegardes)
+    IniWrite($sIniPath, "Params", "Lecteur", StringUpper($Lecteur))
 
-	$IntervalleInterCaptures = IniRead($Lecteur & $DossierSauvegardes & "\BacBackup\BacBackup.ini", "Params", "IntervalleInterCapturesEnSecondes", "")
-	If StringIsInt($IntervalleInterCaptures) = 0 Or $IntervalleInterCaptures < 2 Or $IntervalleInterCaptures > 20 Then
-		$IntervalleInterCaptures = 5 ;5 Secondes
-		IniWrite($Lecteur & $DossierSauvegardes & "\BacBackup\BacBackup.ini", "Params", "IntervalleInterCapturesEnSecondes", $IntervalleInterCaptures)
-	EndIf
-	$IntervalleInterCaptures *= 1000
+    ; ═══════════════════════════════════════════════════════════════════
+    ; GÉNÉRATION DU NUMÉRO DE SESSION INCRÉMENTÉ
+    ; ═══════════════════════════════════════════════════════════════════
+    Local $sOldSessionName = IniRead($sIniPath, "Params", "DossierSession", "")
+
+    Local $Tmp = StringLeft($sOldSessionName, 3)
+    If StringRegExp($Tmp, "^[0-9]{3}$", 0) = 0 Then
+        $Tmp = 1
+    Else
+        $Tmp = Int($Tmp) + 1
+        If $Tmp > 999 Then
+            $Tmp = 1
+        EndIf
+    EndIf
+
+    Local $sNumeroSession = StringFormat("%03d", $Tmp)
+
+    Local $sNomSession = $sNumeroSession & '___' & _
+                         StringFormat("%02d", @MDAY) & "_" & _
+                         StringFormat("%02d", @MON) & "_" & _
+                         @YEAR & "___" & _
+                         StringFormat("%02d", @HOUR) & "h" & _
+                         StringFormat("%02d", @MIN)
+
+    ; Écrire le nouveau nom de session dans le INI
+    IniWrite($sIniPath, "Params", "DossierSession", $sNomSession)
+
+    ; Mettre à jour la variable GLOBALE
+    $DossierSession = $sDossierBase & "\BacBackup\" & $sNomSession
+
+    ; Créer les dossiers de session
+    If Not FileExists($DossierSession) Then
+        DirCreate($DossierSession)
+    EndIf
+
+    Local $sCaptureDir = $DossierSession & "\_CapturesEcran"
+    If Not FileExists($sCaptureDir) Then
+        DirCreate($sCaptureDir)
+    EndIf
+
+    ; ═══════════════════════════════════════════════════════════════════
+    ; CRÉATION DU FICHIER D'INFORMATION DE SESSION
+    ; ═══════════════════════════════════════════════════════════════════
+    Local $sTexteDeclencheur = ($Cause = "") ? "Démarrage de BacBackup" : $Cause
+    Local $sInfoFile = $DossierSession & "\_info_session.txt"
+    Local $hInfo = FileOpen($sInfoFile, $FO_OVERWRITE + $FO_UTF8_NOBOM)
+    If $hInfo <> -1 Then
+        FileWrite($hInfo, _
+            "═══════════════════════════════════════════════════════" & @CRLF & _
+            "  INFORMATIONS DE SESSION - BacBackup" & @CRLF & _
+            "═══════════════════════════════════════════════════════" & @CRLF & @CRLF & _
+            "Déclencheur  : " & $sTexteDeclencheur & @CRLF & _
+            "Date/Heure   : " & @YEAR & "-" & StringFormat("%02d", @MON) & "-" & StringFormat("%02d", @MDAY) & _
+            " " & StringFormat("%02d", @HOUR) & ":" & StringFormat("%02d", @MIN) & ":" & StringFormat("%02d", @SEC) & @CRLF & _
+            "Session      : " & $sNomSession & @CRLF & _
+            "Ordinateur   : " & @ComputerName & @CRLF & _
+            "Utilisateur  : " & @UserName & @CRLF & _
+            "Système      : " & @OSVersion & " (" & @OSArch & ")" & @CRLF)
+        FileClose($hInfo)
+    EndIf
+
+    ; Mettre à jour la variable GLOBALE
+    $sClipboardLogFile = $DossierSession & "\_journal_presse_papier.log"
+
+    ; Créer le fichier journal du presse-papier
+    If Not FileExists($sClipboardLogFile) Then
+        Local $hFile = FileOpen($sClipboardLogFile, $FO_OVERWRITE + $FO_UTF8_NOBOM)
+        If $hFile <> -1 Then
+            FileWrite($hFile, _StringRepeat("═", 80) & @CRLF & _
+                    "  JOURNAL DU PRESSE-PAPIER" & @CRLF & _
+                    _StringRepeat("═", 80) & @CRLF & @CRLF & _
+                    "Session : " & $DossierSession & @CRLF & _
+                    "Début   : " & @YEAR & "-" & StringFormat("%02d", @MON) & "-" & StringFormat("%02d", @MDAY) & _
+                    " " & StringFormat("%02d", @HOUR) & ":" & StringFormat("%02d", @MIN) & ":" & StringFormat("%02d", @SEC) & @CRLF & _
+                    _StringRepeat("■", 80) & @CRLF)
+            FileClose($hFile)
+        EndIf
+    EndIf
+
+    ; ═══════════════════════════════════════════════════════════════════
+    ; LECTURE DES PARAMÈTRES DE CONFIGURATION
+    ; ═══════════════════════════════════════════════════════════════════
+    $IntervalleInterSauvegardes = IniRead($sIniPath, "Params", "IntervalleInterSauvegardesEnMinutes", "2")
+    If Not StringIsInt($IntervalleInterSauvegardes) Or $IntervalleInterSauvegardes < 1 Or $IntervalleInterSauvegardes > 15 Then
+        $IntervalleInterSauvegardes = 2
+        IniWrite($sIniPath, "Params", "IntervalleInterSauvegardesEnMinutes", $IntervalleInterSauvegardes)
+    EndIf
+    $IntervalleInterSauvegardes *= 60000
+
+    $IntervalleInterCaptures = IniRead($sIniPath, "Params", "IntervalleInterCapturesEnSecondes", "5")
+    If Not StringIsInt($IntervalleInterCaptures) Or $IntervalleInterCaptures < 2 Or $IntervalleInterCaptures > 20 Then
+        $IntervalleInterCaptures = 5
+        IniWrite($sIniPath, "Params", "IntervalleInterCapturesEnSecondes", $IntervalleInterCaptures)
+    EndIf
+    $IntervalleInterCaptures *= 1000
 EndFunc   ;==>Initialisation
+
+;#########################################################################################
+Func Capturer()
+
+    ; Vérifier si le système sort d'une veille/suspend
+    DllCall("user32.dll", "bool", "GetLastInputInfo", "ptr", DllStructGetPtr($tLastInput))
+    Local $currentTick = DllStructGetData($tLastInput, 2)
+
+    ; Gestion du débordement du tick (49.7 jours)
+    If $currentTick < $g_LastInputTick Then
+        $g_LastInputTick = $currentTick
+        Return 0
+    EndIf
+
+    Local $tickDiff = $currentTick - $g_LastInputTick
+
+    ; Si le tick a sauté (veille/suspend) > 30 minutes
+    If $tickDiff > $INACTIVITY_THRESHOLD_MS Then ; 30 min = 1 800 000 ms
+
+        CleanUp()
+        Initialisation("Sortie de veille/suspend (" & Round($tickDiff / 60000, 0) & " min d'inactivité)")
+
+        $g_LastInputTick = $currentTick
+        $g_iTotalCaptures = 0
+        $sLastClipboardText = ""
+		$g_bPendingNewSessionAfterIdle = False
+		$g_LongIdleDuration = 0
+        Return 0
+    EndIf
+    $g_LastInputTick = $currentTick
+
+    ; Temps d'inactivité en ms
+    Local $iIdleTime = _Timer_GetIdleTime()
+
+	; Vérifier si une nouvelle session est en attente
+    If $g_bPendingNewSessionAfterIdle Then
+        ; Vérifier qu'il y a VRAIMENT une activité maintenant
+        If $iIdleTime <= $IntervalleInterCaptures Then
+            ; Activité détectée ! Créer la nouvelle session
+            CleanUp()
+			Initialisation("Reprise après inactivité prolongée (" & Round($g_LongIdleDuration / 60000, 0) & " min)")
+            $g_iTotalCaptures = 0
+            $sLastClipboardText = ""
+            $g_bPendingNewSessionAfterIdle = False
+			$g_LongIdleDuration = 0
+            ; Ne pas capturer cette fois-ci, laisser la prochaine itération le faire
+            Return 0
+        EndIf
+    EndIf
+
+    ; Conditions pour capturer :
+    ; - Pas d'économiseur d'écran actif
+    ; - Temps d'inactivité < seuil (ex: < 5s pour éviter captures inutiles)
+    ; - Une fenêtre active existe
+    Local $bScreensaverActive = False
+    If $scrnsave <> "" Then  ; Seulement si un économiseur est configuré
+        $bScreensaverActive = ProcessExists($scrnsave)
+    EndIf
+
+    If $iIdleTime <= $IntervalleInterCaptures And _
+       Not $bScreensaverActive And _
+       WinGetTitle("") <> "" Then
+        Local $sCaptureDir = $DossierSession & "\_CapturesEcran"
+
+        If Not FileExists($sCaptureDir) Then
+            ; Si échec de création, abandonner
+            If Not DirCreate($sCaptureDir) Then
+                Return 0
+            EndIf
+        EndIf
+
+        ; Générer un nom de fichier avec numéro séquentiel
+        $g_iTotalCaptures += 1
+
+        ; Générer un nom de fichier avec numéro séquentiel
+        Local $NomImage = StringFormat("%04d", $g_iTotalCaptures) & "_" & _
+                          StringFormat("%02d", @HOUR) & "h" & _
+                          StringFormat("%02d", @MIN) & "_" & _
+                          StringFormat("%02d", @SEC) & ".png"
+        Local $sPath = $sCaptureDir & "\" & $NomImage
+
+        _ScreenCapture_Capture($sPath)
+
+        If @error = 0 And FileExists($sPath) Then
+            ; Vérifier si le fichier n'est pas vide/corrompu
+            ; Une capture d'écran PNG fait plus de 10 KB
+            If FileGetSize($sPath) > 10240 Then ; > 10 KB
+                Return 1 ; Capture réussie
+            Else
+                ; Fichier anormalement petit = probablement corrompu
+                FileDelete($sPath)
+                $g_iTotalCaptures -= 1
+                Return 0
+            EndIf
+        Else
+            ; Annuler l'incrémentation si erreur - Pas de capture
+            $g_iTotalCaptures -= 1
+            Return 0
+        EndIf
+    EndIf
+EndFunc   ;==>Capturer
+
+;~ ###############################################################################
+Func LancerSauvegardeNormale()
+	Capturer()
+	Local $iIdleTime = _Timer_GetIdleTime()
+    Local $bScreensaverActive = False
+    If $scrnsave <> "" Then
+        $bScreensaverActive = ProcessExists($scrnsave)
+    EndIf
+    If $iIdleTime <= $IntervalleInterSauvegardes And _
+       Not $bScreensaverActive And _
+       WinGetTitle("") <> "" Then
+		ShellExecute(@ScriptDir & "\BacBackup_Sauvegarder.exe", 'normale' & " " & $DossierSession)
+	EndIf
+EndFunc   ;==>LancerSauvegardeNormale
+
+;#########################################################################################
+Func LancerSauvegardeForcee()
+	Capturer()
+	ShellExecute(@ScriptDir & "\BacBackup_Sauvegarder.exe", 'forcee' & " " & $DossierSession)
+EndFunc   ;==>LancerSauvegardeForcee
+
+;#########################################################################################
+
+Func _GetScreensaverName()
+    ; Lecture directe du registre sans cache
+    Local $sReg = RegRead("HKEY_CURRENT_USER\Control Panel\Desktop", "SCRNSAVE.EXE")
+
+    If @error Then
+        ; Si erreur de lecture (clé inexistante, droits insuffisants)
+        Return "scrnsave.scr"  ; Valeur par défaut sécurisée
+    EndIf
+
+    If $sReg = "" Then
+        ; Économiseur désactivé (chaîne vide dans le registre)
+        Return ""  ; Chaîne vide indique aucun économiseur
+    EndIf
+
+    ; Extraire juste le nom du fichier (sans le chemin)
+    Local $iLastBackslash = StringInStr($sReg, "\", 0, -1)  ; Dernière occurrence de "\"
+
+    If $iLastBackslash > 0 Then
+        Return StringMid($sReg, $iLastBackslash + 1)  ; Partie après le dernier "\"
+    Else
+        Return $sReg  ; Déjà juste le nom
+    EndIf
+EndFunc   ;==>_GetScreensaverName
 
 ;#########################################################################################
 
 Func InitialiserSurveillancePressePapier()
-	; Créer une fenêtre cachée pour recevoir les messages du presse-papier
-	$hClipboardGUI = GUICreate("ClipboardMonitor", 0, 0, 0, 0, 0, $WS_EX_TOOLWINDOW)
+	; Créer une fenêtre cachée pour recevoir les messages du presse-papier ET USB
+	$hClipboardGUI = GUICreate("BacBackupMonitor", 0, 0, 0, 0, 0, $WS_EX_TOOLWINDOW)
 	GUISetState(@SW_HIDE, $hClipboardGUI)
 
 	; Enregistrer pour écouter les changements du presse-papier
 	DllCall("user32.dll", "bool", "AddClipboardFormatListener", "hwnd", $hClipboardGUI)
 
-	; Enregistrer le message de mise à jour du presse-papier
+	; Enregistrer les messages
 	GUIRegisterMsg($WM_CLIPBOARDUPDATE, "OnClipboardChange")
-EndFunc   ;==>InitialiserSurveillancePressePapier
+	GUIRegisterMsg($WM_DEVICECHANGE, "OnDeviceChange") ; ★ AJOUT surveillance USB
 
+	; Initialiser la liste des lecteurs
+	_UpdateDrives()
+EndFunc   ;==>InitialiserSurveillancePressePapier
 ;#########################################################################################
 
 Func OnClipboardChange($hWnd, $Msg, $wParam, $lParam)
@@ -194,40 +517,45 @@ EndFunc   ;==>OnClipboardChange
 ;#########################################################################################
 
 Func _TraiterContenuPressePapier()
-	; Vérifier d'abord si ce sont des fichiers (format CF_HDROP = 15)
 	Local $bIsFile = False
 	Local $hClipboard = DllCall("user32.dll", "bool", "OpenClipboard", "hwnd", 0)
 	If $hClipboard[0] Then
-		Local $hData = DllCall("user32.dll", "handle", "GetClipboardData", "uint", 15) ; CF_HDROP = 15
-		If $hData[0] <> 0 Then
-			$bIsFile = True
-		EndIf
+		Local $hData = DllCall("user32.dll", "handle", "GetClipboardData", "uint", 15)
+		If $hData[0] <> 0 Then $bIsFile = True
 		DllCall("user32.dll", "bool", "CloseClipboard")
 	EndIf
 
-	; Si ce sont des fichiers
 	If $bIsFile Then
 		Local $sText = ClipGet()
 		If Not @error And $sText <> "" Then
-			; Optimisation : comparer d'abord les longueurs
 			Local $iCurrentLen = StringLen($sText)
 			Local $iLastLen = StringLen($sLastClipboardText)
 
-			; Si les longueurs diffèrent, c'est forcément différent
 			If $iCurrentLen <> $iLastLen Or ($iCurrentLen = $iLastLen And $sText <> $sLastClipboardText) Then
-				; Les chemins de fichiers sont séparés par @CRLF ou des sauts de ligne
 				Local $aFiles = StringSplit($sText, @CRLF, 0)
 				Local $sFileList = ""
-				Local $sTmpPath = "", $sAttrib = ""
 				For $i = 1 To $aFiles[0]
-					$sTmpPath = StringStripWS($aFiles[$i], 3)
-					If $sTmpPath <> "" Then
-						$sAttrib = FileGetAttrib($sTmpPath)
-						If @error Or Not StringInStr($sAttrib, "D") Then
-							$sFileList &= "• " & $sTmpPath & @CRLF
-						Else
-							$sFileList &= "• " & _CreateDirTree($sTmpPath)
+					Local $sPath = StringStripWS($aFiles[$i], 3)
+					If $sPath = "" Then ContinueLoop
+
+					Local $sAttrib = FileGetAttrib($sPath)
+					If @error Then
+						$sFileList &= "- " & $sPath & @CRLF
+					ElseIf StringInStr($sAttrib, "D") Then
+						; ➤ Dossier : "+ chemin" puis arborescence indentée de 2 espaces
+						$sFileList &= "+ " & $sPath & @CRLF
+						Local $sTree = _DirTreeToString($sPath, 20)
+						If $sTree <> "" Then
+							Local $aLines = StringSplit(StringStripWS($sTree, 2), @CRLF, 2)
+							For $j = 0 To UBound($aLines) - 1
+								If $aLines[$j] <> "" Then
+									$sFileList &= "  " & $aLines[$j] & @CRLF
+								EndIf
+							Next
 						EndIf
+					Else
+						; ➤ Fichier
+						$sFileList &= "- " & $sPath & @CRLF
 					EndIf
 				Next
 				If $sFileList <> "" Then
@@ -239,34 +567,27 @@ Func _TraiterContenuPressePapier()
 		Return
 	EndIf
 
-	; Sinon, essayer de récupérer du texte (format CF_UNICODETEXT = 13)
+	; Gestion du texte
 	Local $sText = ClipGet()
 	If Not @error And $sText <> "" Then
-		; Optimisation : comparer d'abord les longueurs
 		Local $iCurrentLen = StringLen($sText)
 		Local $iLastLen = StringLen($sLastClipboardText)
 
-		; Si les longueurs diffèrent, c'est forcément différent
 		If $iCurrentLen <> $iLastLen Or ($iCurrentLen = $iLastLen And $sText <> $sLastClipboardText) Then
 			Local $sTextToLog = $sText
 			Local $bTruncated = False
-
-			; Tronquer si nécessaire
 			If $iCurrentLen > $MAX_TEXT_SIZE Then
 				$sTextToLog = StringLeft($sText, $MAX_TEXT_SIZE)
 				$bTruncated = True
 			EndIf
-
-			; Ajouter la remarque de troncature si nécessaire
 			If $bTruncated Then
 				$sTextToLog &= @CRLF & @CRLF & "*** TEXTE TRONQUÉ *** (Longueur originale : " & $iCurrentLen & " caractères, tronqué à " & $MAX_TEXT_SIZE & " caractères)"
 			EndIf
-
 			_EcrireJournalPressePapier("TEXTE", $sTextToLog)
-			$sLastClipboardText = $sText ; On garde le texte complet pour la comparaison
+			$sLastClipboardText = $sText
 		EndIf
 	EndIf
-EndFunc   ;==>_TraiterContenuPressePapier
+EndFunc
 
 ;#########################################################################################
 
@@ -308,57 +629,19 @@ EndFunc   ;==>_ProcessWindowsMessages
 ;#########################################################################################
 
 Func _NettoyerRessources()
-	; Désenregistrement propre du listener presse-papier
+	; Désenregistrement du listener presse-papier
 	If IsHWnd($hClipboardGUI) Then
 		DllCall("user32.dll", "bool", "RemoveClipboardFormatListener", "hwnd", $hClipboardGUI)
 		GUIDelete($hClipboardGUI)
+		$hClipboardGUI = 0 ; Réinitialiser pour éviter les fuites
 	EndIf
 EndFunc   ;==>_NettoyerRessources
 
 ;#########################################################################################
-; Fonctions existantes de BacBackup (inchangées)
-;#########################################################################################
-
-Func Capturer($NbAppelRecursif = 0)
-	Local $iIdleTime = _Timer_GetIdleTime()
-	If $iIdleTime <= $IntervalleInterCaptures And Not ProcessExists($scrnsave) And WinGetTitle("") <> "" Then
-		Local $NomImage = @HOUR & "h_" & @MIN & "_" & @SEC & ".png"
-		_ScreenCapture_Capture($DossierSession & "\0-CapturesÉcran\" & $NomImage)
-
-		If @error <> 0 Then
-			If $NbAppelRecursif > 2 Then
-				$IntervalleInterCaptures += $IntervalleInterCaptures
-				Return
-			EndIf
-			Initialisation()
-			$NbAppelRecursif += 1
-			Capturer($NbAppelRecursif)
-		EndIf
-	EndIf
-EndFunc   ;==>Capturer
-
-;#########################################################################################
-
-Func LancerSauvegardeForcee()
-	Capturer()
-	ShellExecute(@ScriptDir & "\BacBackup_Sauvegarder.exe", 'forcee')
-EndFunc   ;==>LancerSauvegardeForcee
-
-;#########################################################################################
-
-Func LancerSauvegardeNormale()
-	Capturer()
-	Local $iIdleTime = _Timer_GetIdleTime()
-	If $iIdleTime <= $IntervalleInterSauvegardes And Not ProcessExists($scrnsave) And WinGetTitle("") <> "" Then
-		ShellExecute(@ScriptDir & "\BacBackup_Sauvegarder.exe", 'normale')
-	EndIf
-EndFunc   ;==>LancerSauvegardeNormale
-
-;#########################################################################################
 
 Func AfficherInterface()
-	LancerSauvegardeNormale()
 	ShellExecute(@ScriptDir & "\BacBackup_Interface.exe", StringRegExpReplace($DossierSession, "(\\[^\\]*)$", ""))
+	LancerSauvegardeNormale()
 EndFunc   ;==>AfficherInterface
 
 ;#########################################################################################
@@ -376,7 +659,7 @@ Func CleanUp()
 	Local Const $NombreMaxDeDossiersDeSauve_Seuil_Maximum = 500
 
 	Local Const $TailleMaxDuDossierBacBackupEnGigaoctet_Seuil_Minimum = 10 ; Go
-	Local Const $TailleMaxDuDossierBacBackupEnGigaoctet_Default_Value = 75 ; Go
+	Local Const $TailleMaxDuDossierBacBackupEnGigaoctet_Default_Value = 50 ; Go
 	Local Const $TailleMaxDuDossierBacBackupEnGigaoctet_Seuil_Maximum = 200 ; Go
 
 	Local $TailleMaxDuDossierBacBackupEnGigaoctet = IniRead(StringRegExpReplace($DossierSession, "(\\[^\\]*)$", "") & "\BacBackup.ini", "Params", "TailleMaxDuDossierBacBackupEnGigaoctet", "0")
@@ -390,12 +673,12 @@ Func CleanUp()
 		$NombreMaxDeDossiersDeSauve = $NombreMaxDeDossiersDeSauve_Default_Value
 		IniWrite(StringRegExpReplace($DossierSession, "(\\[^\\]*)$", "") & "\BacBackup.ini", "Params", "NombreMaxDeDossiersDeSauve", $NombreMaxDeDossiersDeSauve)
 	EndIf
-
-	Local $aDrive = DriveGetDrive('FIXED')
-	For $i = 1 To $aDrive[0]
-		If (DriveGetType($aDrive[$i], $DT_BUSTYPE) <> "USB") And _WinAPI_IsWritable($aDrive[$i]) Then
-			$Lecteur = $aDrive[$i]
-			$Chemin = $Lecteur & "\Sauvegardes"
+	Local $sDrive
+	Local $aDrives = DriveGetDrive('FIXED')
+	For $i = 1 To $aDrives[0]
+		If (DriveGetType($aDrives[$i], $DT_BUSTYPE) <> "USB") And _WinAPI_IsWritable($aDrives[$i]) Then
+			$sDrive = $aDrives[$i]
+			$Chemin = $sDrive & "\Sauvegardes"
 			If Not FileExists($Chemin & "\BacBackup") Then ContinueLoop
 
 			If FileExists($Chemin & "\BacBackup\BacBackup.ini") Then
@@ -431,17 +714,19 @@ Func CleanUp()
 			EndIf
 
 			Local $DossiersSessions = _FileListToArrayRec($Chemin & "\BacBackup", "*", 2, 0, 2, 2)
-			If IsArray($DossiersSessions) And ($DossiersSessions[0] > $NombreMaxDeDossiersDeSauve / 10 _
+			If IsArray($DossiersSessions) And ($DossiersSessions[0] > $NombreMaxDeDossiersDeSauve _
 					Or Round(DirGetSize($Chemin & "\BacBackup\") / 1024 / 1024 / 1024) > $TailleMaxDuDossierBacBackupEnGigaoctet) Then
+				_UnlockFolder($Chemin & "\BacBackup")
 				For $j = Round($DossiersSessions[0] / 2) To 1 Step -1
 					DirRemove($DossiersSessions[$j], 1)
 				Next
+				_LockFolderContents($Chemin & "\BacBackup")
 			EndIf
-			_LockFolder($Chemin)
 		EndIf
 	Next
 EndFunc   ;==>CleanUp
 
+;#########################################################################################
 ;#########################################################################################
 
 Func _Timer_GetIdleTime()
@@ -457,152 +742,77 @@ Func _Timer_GetIdleTime()
 		Return SetError(0, 1, $avTicks[0])
 	EndIf
 EndFunc   ;==>_Timer_GetIdleTime
+
 ;#########################################################################################
 
-Func _CreateDirTree($sDirectoryPath, $sFolderBar = "♦", $sTreeBar = "│", $sSeparator = "─", $iNSeparator = 3)
+;#########################################################################################
 
-	Local $sFinalTree = ""
-	Local $iMaxItems = 20
-	Local $iItemCount = 0
-;~     Local $aFiles = _FileListToArrayRec($sDirectoryPath, "*", $FLTAR_FILESFOLDERS, -2, $FLTAR_SORT)
-	Local $aFiles = _FileListToArrayLimited($sDirectoryPath, $iMaxItems)
+Func OnDeviceChange($hWnd, $Msg, $wParam, $lParam)
+;~ 	MsgBox(0, "", "Entrée dans la fonction DeviceChange") ; Décommenter pour debug
+	If $hWnd <> $hClipboardGUI Then Return
+	Switch $wParam
+		Case $DBT_DEVICECOMPLETEREMOVAL
+			_UpdateDrives()
+		Case $DBT_DEVICEARRIVAL
+			Local $sNewDrive = _FindNewDrive()
+			If $sNewDrive <> "" And DriveStatus($sNewDrive) = "READY" Then
+				; Recherche directe de BacCollector*.* à la racine
+				Local $bHasBacCollector = False
+				Local $hSearch = FileFindFirstFile($sNewDrive & "\BacCollector*.*")
+				If $hSearch <> -1 Then
+					$bHasBacCollector = True
+					FileClose($hSearch)
+				EndIf
 
-	; ➤ 1. Afficher le **chemin complet** du dossier racine (sans indentation)
-	$sFinalTree &= $sDirectoryPath & @CRLF
+				; Lancer UsbWatcher.exe seulement si BacCollector absent
+				If Not $bHasBacCollector And FileExists(@ScriptDir & "\BacBackup_UsbWatcher.exe") Then
+					ShellExecute(@ScriptDir & "\BacBackup_UsbWatcher.exe", $sNewDrive & " " & $DossierSession)
+				EndIf
+			EndIf
+			_UpdateDrives()
+	EndSwitch
+EndFunc   ;==>OnDeviceChange
+;#########################################################################################
 
-	; ➤ 2. Parcourir les enfants, avec indentation globale de 4 espaces
-	If IsArray($aFiles) And $aFiles[0] > 0 Then
-		For $i = 1 To $aFiles[0]
-			$iItemCount += 1
+Func _FindNewDrive()
+	Local $aTempDrives = DriveGetDrive("REMOVABLE")
 
-			Local $sRelativePath = $aFiles[$i]
-			Local $sFilePath = $sDirectoryPath & "\" & $sRelativePath
-			Local $sAttrib = FileGetAttrib($sFilePath)
+	If Not IsArray($aTempDrives) Then Return ""
 
-			Local $sName = StringInStr($sAttrib, "D") ? _GetFolderName($sFilePath) : _GetFileName($sFilePath)
-			Local $sIndentation = _GenerateIndentNodes($sDirectoryPath, $sRelativePath, $sFolderBar, $sTreeBar, $sSeparator)
+	For $i = 1 To $aTempDrives[0]
+		Local $bIsOld = False
 
-			; ➤ Ajout des 4 espaces d'indentation globale pour les enfants
-			$sFinalTree &= "    " & $sIndentation & $sName & @CRLF
-		Next
-
-		; ➤ 3. Message de troncature (aussi indenté de 4 espaces)
-		If $aFiles[0] = $iMaxItems Then
-;~             $sFinalTree &= @CRLF & "    … [+ " & ($aFiles[0] - $iMaxItems) & " élément" & (($aFiles[0] - $iMaxItems) = 1 ? "" : "s") & " omis]" & @CRLF
-			$sFinalTree &= "    … [résultat tronqué, affichage limité aux " & $iMaxItems & " premiers éléments trouvés]" & @CRLF & @CRLF
+		If IsArray($g_aDrives) Then
+			For $j = 1 To $g_aDrives[0]
+				If $g_aDrives[$j] = $aTempDrives[$i] Then
+					$bIsOld = True
+					ExitLoop
+				EndIf
+			Next
 		EndIf
-	EndIf
 
-	Return $sFinalTree
-EndFunc   ;==>_CreateDirTree
-
-
-Func _CountItemsInFolder($sDirectoryPath)
-	Local $hSearch = FileFindFirstFile($sDirectoryPath & "\*.*")
-	If $hSearch = -1 Then Return 0
-
-	Local $iCount = 0
-	While 1
-		FileFindNextFile($hSearch)
-		If @error Then ExitLoop
-		$iCount += 1
-	WEnd
-	FileClose($hSearch)
-	Return $iCount
-EndFunc   ;==>_CountItemsInFolder
-
-
-Func _GenerateIndentNodes($sDirectoryPath, $sFolderRelativePath, $sFolderBar, $sTreeBar, $sSeparator, $iNSeparator = 3)
-	Local $aSplit = StringSplit($sFolderRelativePath, "\")
-	Local $iDepth = $aSplit[0]
-
-	; ➤ Cas élément direct (1er niveau) : "♦───"
-	If $iDepth = 1 Then
-		Return $sFolderBar & _StringRepeat($sSeparator, $iNSeparator)
-	EndIf
-
-	; ➤ Cas général (profondeur ≥ 2)
-	Local $sBars = ""
-	Local $sFilePath = ""
-
-	For $i = 1 To $iDepth - 1
-		$sFilePath = _ArrayToString($aSplit, "\", 1, $i)
-		Local $iFiles = _CountItemsInFolder($sDirectoryPath & "\" & $sFilePath)
-
-		If $i = $iDepth - 1 Then
-			$sBars &= $sFolderBar & _StringRepeat($sSeparator, $iNSeparator)
-		Else
-			$sBars &= ($iFiles > 1) ? $sTreeBar & _StringRepeat(" ", $iNSeparator) : " " & _StringRepeat(" ", $iNSeparator)
-		EndIf
+		If Not $bIsOld Then Return $aTempDrives[$i]
 	Next
 
-	Return $sBars
-EndFunc   ;==>_GenerateIndentNodes
+	Return ""
+EndFunc   ;==>_FindNewDrive
 
+;#########################################################################################
 
-Func _GetFileName($sFullPath)
-	Local $aSplit = StringSplit($sFullPath, "\")
-	Return $aSplit[$aSplit[0]]
-EndFunc   ;==>_GetFileName
+Func _UpdateDrives()
+	$g_aDrives = DriveGetDrive("REMOVABLE")
+	If @error Then $g_aDrives = 0
+EndFunc   ;==>_UpdateDrives
 
+;#########################################################################################
+;#########################################################################################
 
-Func _GetFolderName($sFullPath)
-	Local $aSplit = StringSplit($sFullPath, "\")
-	Return $aSplit[$aSplit[0]]
-EndFunc   ;==>_GetFolderName
-
-;==================================================================================
-; _FileListToArrayLimited($sRootDir, $iMaxItems = 20)
-; Parcourt récursivement en profondeur, mais s'arrête dès que $iMaxItems sont trouvés.
-; Retourne tableau 1D : [0]=nb, [1..n]=chemins relatifs
-;==================================================================================
-Func _FileListToArrayLimited($sRootDir, $iMaxItems = 20)
-	Local $aResult[1] = [0]
-	Local $iCount = 0
-
-	; Fonction récursive interne (utilise ByRef pour $iCount et $aResult)
-	_TraverseDir($sRootDir, "", $sRootDir, $iCount, $aResult, $iMaxItems)
-
-	$aResult[0] = $iCount
-	Return $aResult
-EndFunc   ;==>_FileListToArrayLimited
-
-
-; Fonction récursive interne — ne pas appeler directement
-Func _TraverseDir($sBaseDir, $sRelPath, $sCurrentDir, ByRef $iCount, ByRef $aResult, $iMax)
-	If $iCount >= $iMax Then Return ; ✅ arrêt immédiat
-
-	Local $hSearch = FileFindFirstFile($sCurrentDir & "\*.*")
-	If $hSearch = -1 Then Return
-
-	Local $aFilesSorted[0] ; pour trier localement (facultatif mais recommandé)
-
-	; 1. Lister tous les éléments du dossier courant (sans les traiter encore)
-	While 1
-		Local $sName = FileFindNextFile($hSearch)
-		If @error Then ExitLoop
-		_ArrayAdd($aFilesSorted, $sName)
-	WEnd
-	FileClose($hSearch)
-
-	; 2. Trier (pour cohérence avec _FileListToArrayRec + $FLTAR_SORT)
-	_ArraySort($aFilesSorted)
-
-	; 3. Parcourir dans l'ordre trié
-	For $i = 0 To UBound($aFilesSorted) - 1
-		If $iCount >= $iMax Then ExitLoop
-
-		Local $sName = $aFilesSorted[$i]
-		Local $sFullPath = $sCurrentDir & "\" & $sName
-		Local $sNewRelPath = ($sRelPath = "") ? $sName : $sRelPath & "\" & $sName
-
-		; ➤ Ajouter l'élément (fichier ou dossier)
-		_ArrayAdd($aResult, $sNewRelPath)
-		$iCount += 1
-
-		; ➤ Si c'est un dossier → descendre dedans (récursion)
-		If StringInStr(FileGetAttrib($sFullPath), "D") Then
-			_TraverseDir($sBaseDir, $sNewRelPath, $sFullPath, $iCount, $aResult, $iMax)
-		EndIf
-	Next
-EndFunc   ;==>_TraverseDir
+Func _GestionDoubleClicTray()
+    ; Vérifie si la touche SHIFT (Code 10) est enfoncée
+    If _IsPressed("10") Then
+        AfficherInterface()
+    Else
+        ; Comportement si on double-clique SANS Shift
+		LancerSauvegardeForcee()
+    EndIf
+EndFunc   ;==>_GestionDoubleClicTray

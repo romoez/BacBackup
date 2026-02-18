@@ -1,22 +1,34 @@
 #NoTrayIcon
-#Region ;**** Directives created by AutoIt3Wrapper_GUI ****
-;~ #AutoIt3Wrapper_Compression=4
-;~ #AutoIt3Wrapper_UseUpx=y
+#Region ;**** Directives AutoIt3Wrapper ****
 #AutoIt3Wrapper_Run_Au3Stripper=y
-#EndRegion ;**** Directives created by AutoIt3Wrapper_GUI ****
+;~ #Au3Stripper_Parameters=/rm /mo /sf /sv
+#Au3Stripper_Parameters=/rm /sf /sv
+#AutoIt3Wrapper_UseUpx=n
+#EndRegion
 
+#Region ;**** Métadonnées de l'application ****
 #pragma compile(Icon, BacBackup.ico)
-#pragma compile(FileDescription, BacBackup Auto-Sauvegarde)
-#pragma compile(FileVersion, 2.2.9.501, 2.2.9.501) ; Le dernier paramètre est optionnel
+#pragma compile(FileDescription, BacBackup - Interface d'administration)
+#pragma compile(FileVersion, 2.5.26.218)
+#pragma compile(ProductVersion, 2.5.26.218)
 #pragma compile(ProductName, BacBackup)
-#pragma compile(ProductVersion, 2.2.9.501)
+#pragma compile(InternalName, BacBackup_Interface)
+#pragma compile(OriginalFilename, BacBackup_Interface.exe)
+#pragma compile(AutoItExecuteAllowed, false)
+#pragma compile(InputBoxRes, true)
+#pragma compile(Compatibility, vista, win7, win8, win10, win11)
+#pragma compile(Console, false)
+#EndRegion
 
-#pragma compile(LegalCopyright, 2016-2025 © La Communauté Tunisienne des Enseignants d'Informatique)
-#pragma compile(Comments,'BacBackup - Fenêtre principale')
+#Region ;**** Informations légales ****
+#pragma compile(LegalCopyright, © 2016-2026 Communauté Tunisienne des Enseignants d'Informatique)
+#pragma compile(Comments, Module de sauvegarde automatique - Exécuté par le service principal BacBackup)
+#pragma compile(CompanyName, CTEI - Communauté Tunisienne des Enseignants d'Informatique)
+#EndRegion
+
+#Region ;**** Configuration de sortie ****
 #pragma compile(Out, Installer\Files\BacBackup_Interface.exe)
-#pragma compile(CompanyName, La Communauté Tunisienne des Enseignants d'Informatique)
-
-#NoTrayIcon
+#EndRegion
 
 #include <WinAPIFiles.au3>
 #include <ListViewConstants.au3>
@@ -60,7 +72,6 @@ $Prog_Version = FileGetVersion(@ScriptFullPath)
 
 GUIRegisterMsg($WM_NOTIFY, "WM_NOTIFY")
 _MainGui()
-
 ;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 ;@@@@@@@@@@@@@@     Fin Programme Principal    @@@@@@@@@@@@@@@@@@@@@@@
 ;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
@@ -127,10 +138,10 @@ Func _CheckPassword()
 			Case $idBtnOK
 				$sEnteredPassword = GUICtrlRead($idPassword)
 
-				If StringLen($sEnteredPassword) <= 3 Then
-					MsgBox(48 + 262144, "Attention", "Veuillez entrer un mot de passe de plus de 3 caractères.", 0, $hPasswordGUI)
-					ContinueLoop
-				EndIf
+;~ 				If StringLen($sEnteredPassword) <= 3 Then
+;~ 					MsgBox(48 + 262144, "Attention", "Veuillez entrer un mot de passe de plus de 3 caractères.", 0, $hPasswordGUI)
+;~ 					ContinueLoop
+;~ 				EndIf
 
 				; Calcul du hash du mot de passe saisi
 				$sEnteredHash = _MD5ForString($sEnteredPassword)
@@ -345,15 +356,17 @@ Func _MainGui()
 	GUICtrlSetFont(-1, 8.5, 400, 0, "Tahoma")
 	GUICtrlSetBkColor(-1, "-2")
 
-	$hGitHubURL = _GUICtrlHyperLink_Create("https://github.com/romoez/BacBackup", 200, 260, 280, 20, 0x0000FF, 0x551A8B, _
-			 -1, '', "Téléchargement et code source")
-	GUICtrlSetFont(-1, 8.5, 600, 0, "Tahoma")
+	$hGitHubURL = _GUICtrlHyperLink_Create("https://github.com/romoez/BacBackup", 200, 240, 280, 20, 0x0000FF, 0x551A8B, _
+			 -1, '', "Code source et téléchargement")
+	GUICtrlSetFont(-1, 8.5, 500, 0, "Tahoma")
 
 
 ;~ 	GUICtrlCreateLabel("", 295, 198, 100, 2, $SS_SUNKEN) ;separator
 ;~ 	GUICtrlCreateLabel("Pour tout signalement d'erreur et pour toute suggestion d’amélioration, merci d'envoyer un e-mail à:", 200, 215, 280, 25, -1, -1)
 ;~ 	GUICtrlSetFont(-1, 8, 500, 0, "Tahoma")
-;~ 	$hMail = _GUICtrlHyperLink_Create("moez.romdhane@tarbia.tn", 200, 245, -1, -1, 0x0000FF, 0x551A8B)
+	$hMail = _GUICtrlHyperLink_Create("moez.romdhane@tarbia.tn", 200, 260, -1, -1, 0x0000FF, 0x551A8B, _
+			 -1, '', "Contact")
+	GUICtrlSetFont($hMail, 8.5, 500, 0, "Tahoma")
 	;Fin   *****************************************************************************************
 	;set default to Panel1
 	GUISwitch($aPanel[1])
@@ -387,6 +400,7 @@ Func _MainGui()
 							EndIf
 						Next
 					Case $GUI_Ouvrir_BasDePage
+						Run("explorer.exe /e,/select, " & '"' & $CheminSauve & '\' & $DossierSession & '"')
 						If FileExists($CheminSauve & '\' & $DossierSession) Then
 							Run("explorer.exe /e,/select, " & '"' & $CheminSauve & '\' & $DossierSession & '"')
 							Sleep(1000)
@@ -401,8 +415,8 @@ Func _MainGui()
 				EndSwitch
 			Case $aPanel[4] ;à propos
 				Switch $nMsg[0]
-;~ 					Case $hMail
-;~ 						ShellExecute("mailto:moez.romdhane@tarbia.tn?subject=BacBackup " & $Prog_Version)
+					Case $hMail
+						ShellExecute("mailto:moez.romdhane@tarbia.tn?subject=BacBackup " & $Prog_Version)
 					Case $hGitHubURL
 						ShellExecute("https://github.com/romoez/BacBackup", "", "", "open")  ;
 				EndSwitch

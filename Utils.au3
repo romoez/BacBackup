@@ -2,6 +2,9 @@
 #include <Array.au3>
 #include <File.au3>
 #include <WinAPIFiles.au3>
+#include <WinAPISys.au3>
+;~ #include <WinAPIProc.au3>
+
 
 Global $UserLocal = _GetUserLocal()
 ; Au moins 15 Go d'espace libre pour garantir que Windows peut fonctionner correctement
@@ -16,7 +19,7 @@ Func DossiersBac($FullPath = 1) ; 1:Chemins complets, 0:Chemins relatifs
     Local $aResult = _FileListToArray( _
         StringLeft(@WindowsDir, 2), _
         "bac*2*", _
-        $FLTAR_FOLDERS + $FLTAR_NOHIDDEN + $FLTAR_NOSYSTEM + $FLTAR_NOLINK, _
+        $FLTAR_FOLDERS, _
         $FullPath ? $FLTAR_FULLPATH : $FLTAR_RELPATH)
 
     If Not IsArray($aResult) Then Return _EmptyArray()
@@ -35,7 +38,7 @@ EndFunc
 
 ; ============================================================================
 Func _DossiersSurBureau($FullPath = 1) ; 1:Chemins complets, 0:Chemins relatifs
-    Local $aResult = _FileListToArrayRec(@DesktopDir, _
+    Local $aResult = _FileListToArrayRec(_GetRealDesktopPath(), _
         "1*;2*;3*;4*;7*;8*;9*;bac*2*;dc*;ds*", _
         $FLTAR_FOLDERS + $FLTAR_NOHIDDEN + $FLTAR_NOSYSTEM + $FLTAR_NOLINK, _
         $FLTAR_NORECUR, $FLTAR_FASTSORT, $FullPath ? $FLTAR_FULLPATH : $FLTAR_RELPATH)
@@ -134,7 +137,7 @@ Func DossiersEasyPHPdata($FullPath = 1) ; 1:Chemins complets, 0:Chemins relatifs
             ContinueLoop
         EndIf
 
-        ; EasyPHP/XAMPP standard
+        ; EasyPHP/XAMPP
         $sDataPath = $sBase & '\mysql\data'
         If FileExists($sDataPath) Then
             $iCount += 1
@@ -167,6 +170,66 @@ Func DossiersEasyPHPdata($FullPath = 1) ; 1:Chemins complets, 0:Chemins relatifs
     $aResult[0] = $iCount
     Return $aResult
 EndFunc
+
+; #FUNCTION# ====================================================================================================================
+; Name...........: _WwwFolderHasContent
+; Description....: Analyse la racine d'un serveur Web pour détecter du contenu utilisateur personnalisé.
+; Syntax.........: _WwwFolderHasContent($sApacheDocumentRoot)
+; Parameters.....: $sApacheDocumentRoot - Chemin complet du répertoire à analyser (ex: C:\wamp64\www).
+; Return values..: Success - True si un fichier/dossier (autre que les exclus) est trouvé.
+;                  Failure - False si le dossier est vide, n'existe pas ou ne contient que des éléments exclus.
+; Author.........: BacCollector Team
+; Modified.......:
+; Remarks........: Ignore les fichiers cachés, "index.php" et les dossiers systèmes (wampthemes, wamplangues, img, etc.).
+; Related........:
+; Example........: If _WwwFolderHasContent("C:\wamp64\www") Then MsgBox(0, "Info", "Contenu détecté")
+; ===============================================================================================================================
+Func _WwwFolderHasContent($sApacheDocumentRoot)
+    ; Nettoyage : suppression des slashs de fin pour uniformiser
+    $sApacheDocumentRoot = StringRegExpReplace($sApacheDocumentRoot, "[\\/]+$", "")
+
+    ; 1. Vérification de l'existence du dossier
+    Local $sRootAttribs = FileGetAttrib($sApacheDocumentRoot)
+    If @error Or Not StringInStr($sRootAttribs, "D") Then Return False
+
+    ; 2. Initialisation de la recherche
+    Local $hSearch = FileFindFirstFile($sApacheDocumentRoot & "\*")
+    If $hSearch = -1 Then Return False
+
+    Local $sFileName, $sFullFilePath, $sFileAttribs
+    While 1
+        $sFileName = FileFindNextFile($hSearch)
+        If @error Then ExitLoop
+
+        ; A. Ignorer les entrées système relatives au parcours
+        If $sFileName = "." Or $sFileName = ".." Then ContinueLoop
+
+        ; B. Ignorer index.php (insensible à la casse)
+        If StringLower($sFileName) = "index.php" Then ContinueLoop
+
+        ; C. Ignorer les dossiers spécifiques (insensible à la casse)
+        Switch StringLower($sFileName)
+            Case "wampthemes", "wamplangues", "img", "dashboard", "webalizer", "xampp", "forbidden", "restricted", "phpmyadmin"
+                ContinueLoop
+        EndSwitch
+
+        ; D. Récupérer les attributs pour vérifier si caché
+        $sFullFilePath = $sApacheDocumentRoot & "\" & $sFileName
+        $sFileAttribs = FileGetAttrib($sFullFilePath)
+
+        ; E. Ignorer si le fichier ou dossier est caché (Attribut H)
+        If StringInStr($sFileAttribs, "H") Then ContinueLoop
+
+        ; --- SI ON ARRIVE ICI ---
+        ; C'est qu'on a trouvé quelque chose qui n'est ni index.php,
+        ; ni dans la liste d'exclusion, ni caché.
+        FileClose($hSearch)
+        Return True
+    WEnd
+
+    FileClose($hSearch)
+    Return False ; Rien trouvé de pertinent
+EndFunc   ;==>_WwwFolderHasContent
 
 ; ============================================================================
 ; Recherche le dossier data dans les installations WampServer versionnées
@@ -257,37 +320,127 @@ Func _KillOtherScript()
 EndFunc   ;==>_KillOtherScript
 
 ;#########################################################################################
-Func _LockFolder($Dossier)
+
+; ========== FONCTIONS UTILITAIRES ==========
+Func _IsLocked($Dossier)
+    ; Vérifie si verrouillé en testant la suppression du marqueur
+    Local $sMarker = $Dossier & "\.locked"
+
+    ; Si pas de marqueur, pas verrouillé
+    If Not FileExists($sMarker) Then Return False
+
+    ; Tenter de supprimer le marqueur
+    ; Si suppression réussit = pas vraiment verrouillé
+    ; Si suppression échoue = vraiment verrouillé
+
+    If FileDelete($sMarker) Then
+        ; Suppression réussie = le dossier n'est PAS verrouillé
+        ; Le marqueur était obsolète, il est maintenant supprimé
+        Return False
+    Else
+        ; Suppression échouée = le dossier EST verrouillé
+        Return True
+    EndIf
+EndFunc
+
+Func _CreateLockMarker($Dossier)
+    ; Créer le marqueur AVANT le verrouillage
+    Local $sMarker = $Dossier & "\.locked"
+    Local $sInfo = "Verrouillé le : " & @YEAR & "-" & @MON & "-" & @MDAY & " " & @HOUR & ":" & @MIN & @CRLF
+    $sInfo &= "Utilisateur : " & @UserName & @CRLF
+    $sInfo &= "Ordinateur : " & @ComputerName & @CRLF
+    $sInfo &= "Processus : " & @ScriptName
+
+    FileWrite($sMarker, $sInfo)
+    FileSetAttrib($sMarker, "+SH")
+EndFunc
+
+Func _RemoveLockMarker($Dossier)
+    ; Supprimer le marqueur (après déverrouillage)
+    Local $sMarker = $Dossier & "\.locked"
+    If FileExists($sMarker) Then
+        FileSetAttrib($sMarker, "-SH")
+        FileDelete($sMarker)
+    EndIf
+EndFunc
+
+; ========== VERROUILLAGE ==========
+Func _LockRootFolder($Dossier)
+    ; Verrouille l'accès au dossier racine uniquement
     If Not FileExists($Dossier) Then Return SetError(1, 0, -1)
 
-    Local $sCmd
-    ; Utilise cacls.exe sous Windows 7, icacls.exe pour les versions ultérieures
-    If @OSVersion = "WIN_7" Then
-        $sCmd = 'cacls.exe "' & $Dossier & '" /E /P "' & @UserName & '":N > NUL 2>&1'
-    Else
-        $sCmd = 'icacls.exe "' & $Dossier & '" /deny "' & @UserName & '":(F) /c > NUL 2>&1'
+    ; Vérifier si déjà verrouillé (teste la suppression du marqueur)
+    If _IsLocked($Dossier) Then
+        Return 0
     EndIf
 
-    RunWait(@ComSpec & ' /c ' & $sCmd, "", @SW_HIDE)
-EndFunc
-;#########################################################################################
+    ; ÉTAPE 1 : Créer le marqueur AVANT le verrouillage
+    _CreateLockMarker($Dossier)
 
-Func _UnlockFolder($Dossier)
+    ; ÉTAPE 2 : Appliquer les attributs
+    FileSetAttrib($Dossier, "+SH")
+
+    ; ÉTAPE 3 : Verrouiller avec icacls
+    Local $sIcacls = @SystemDir & "\icacls.exe"
+    Local $sArgs = '"' & $Dossier & '" /deny *S-1-1-0:(F) /c'
+    Local $iPID = Run('"' & $sIcacls & '" ' & $sArgs, "", @SW_HIDE)
+    If @error Then
+        _RemoveLockMarker($Dossier)
+        Return SetError(2, 0, -1)
+    EndIf
+
+    ProcessWaitClose($iPID)
+
+    Return 0
+EndFunc
+
+Func _LockFolderContents($Dossier)
+    ; Verrouille contre la suppression (avec héritage)
     If Not FileExists($Dossier) Then Return SetError(1, 0, -1)
 
-    Local $sCmd
-    ; Utilise cacls.exe sous Windows 7, icacls.exe pour les versions ultérieures
-    If @OSVersion = "WIN_7" Then
-        $sCmd = 'cacls.exe "' & $Dossier & '" /E /P "' & @UserName & '":F > NUL 2>&1'
-    Else
-        ; Supprime toutes les permissions de l'utilisateur puis accorde un contrôle total
-        $sCmd = 'icacls.exe "' & $Dossier & '" /remove "' & @UserName & '" > NUL 2>&1 & ' & _
-                'icacls.exe "' & $Dossier & '" /grant "' & @UserName & '":F > NUL 2>&1'
+    ; Vérifier si déjà verrouillé
+    If _IsLocked($Dossier) Then
+        Return 0
     EndIf
 
-    RunWait(@ComSpec & ' /c ' & $sCmd, "", @SW_HIDE)
+    ; ÉTAPE 1 : Créer le marqueur AVANT le verrouillage
+    _CreateLockMarker($Dossier)
+
+    ; ÉTAPE 2 : Verrouiller avec icacls
+    Local $sIcacls = @SystemDir & "\icacls.exe"
+    Local $sArgs = '"' & $Dossier & '" /grant *S-1-1-0:(OI)(CI)M /deny *S-1-1-0:(OI)(CI)(DE,DC) /c'
+    Local $iPID = Run('"' & $sIcacls & '" ' & $sArgs, "", @SW_HIDE)
+    If @error Then
+        _RemoveLockMarker($Dossier)
+        Return SetError(2, 0, -1)
+    EndIf
+
+    ProcessWaitClose($iPID)
+
+    Return 0
 EndFunc
-;#########################################################################################
+
+; ========== DÉVERROUILLAGE ==========
+Func _UnlockFolder($Dossier, $bRecursive = False)
+    ; Déverrouille un dossier (et optionnellement son contenu)
+    If Not FileExists($Dossier) Then Return SetError(1, 0, -1)
+
+    ; ÉTAPE 1 : Déverrouiller avec icacls
+    Local $sIcacls = @SystemDir & "\icacls.exe"
+    Local $sArgs = '"' & $Dossier & '" /reset ' & ($bRecursive ? '/T ' : '') & '/c'
+    Local $iPID = Run('"' & $sIcacls & '" ' & $sArgs, "", @SW_HIDE)
+    If @error Then Return SetError(2, 0, -1)
+
+    ProcessWaitClose($iPID)
+
+    ; ÉTAPE 2 : Retirer les attributs
+    FileSetAttrib($Dossier, "-SH")
+
+    ; ÉTAPE 3 : Supprimer le marqueur APRÈS le déverrouillage
+    _RemoveLockMarker($Dossier)
+
+    Return 0
+EndFunc
 
 Func _GetUserLocal()
 	$GetTempDir = EnvGet("TEMP") ;This used to get to Local folders for XP and Vista/7
@@ -549,3 +702,187 @@ Func _MD5ForString($sString)
     Return SetError(0, 0, $sMD5)
 
 EndFunc   ;==>_MD5ForString
+
+#Region DirTreeToString
+;#########################################################################################
+Func _DirTreeToString($sRootDir, $iMaxItems = 20)
+    If Not FileExists($sRootDir) Then Return "❌ Dossier introuvable : " & $sRootDir
+
+    $sRootDir = _NormalizePath($sRootDir)
+    Local $sOutput = ""
+    Local $iCount = 0
+
+    ; ➤ On ne met PAS le chemin racine ici — il sera affiché par l'appelant avec "+ "
+    _TraverseAndPrint($sRootDir, "", $iCount, $sOutput, $iMaxItems, True, "", True)
+
+    If $iCount >= $iMaxItems Then
+        $sOutput &= "    … [résultat tronqué à " & $iMaxItems & " éléments]" & @CRLF
+    EndIf
+
+    Return $sOutput
+EndFunc
+
+;#########################################################################################
+
+; Fonction récursive interne — ne pas appeler directement
+Func _TraverseAndPrint($sBasePath, $sRelPath, ByRef $iCount, ByRef $sOutput, $iMax, $bIsLast = False, $sPrefix = "", $bRootLevel = False)
+    If $iCount >= $iMax Then Return
+
+    Local $sCurrentDir = ($sRelPath = "") ? $sBasePath : $sBasePath & "\" & $sRelPath
+    Local $hSearch = FileFindFirstFile($sCurrentDir & "\*.*")
+    If $hSearch = -1 Then Return
+
+    Local $aFolders[100], $iFolders = 0
+    Local $aFiles[100], $iFiles = 0
+    Local $iCapacityFolders = 100, $iCapacityFiles = 100
+
+    While 1
+        Local $sName = FileFindNextFile($hSearch)
+        If @error Then ExitLoop
+        If $sName = "." Or $sName = ".." Then ContinueLoop
+
+        Local $sFullPath = $sCurrentDir & "\" & $sName
+        If StringInStr(FileGetAttrib($sFullPath), "D") Then
+            If $iFolders >= $iCapacityFolders Then
+                $iCapacityFolders *= 2
+                ReDim $aFolders[$iCapacityFolders]
+            EndIf
+            $aFolders[$iFolders] = $sName
+            $iFolders += 1
+        Else
+            If $iFiles >= $iCapacityFiles Then
+                $iCapacityFiles *= 2
+                ReDim $aFiles[$iCapacityFiles]
+            EndIf
+            $aFiles[$iFiles] = $sName
+            $iFiles += 1
+        EndIf
+    WEnd
+    FileClose($hSearch)
+
+    If $iFolders > 0 Then ReDim $aFolders[$iFolders]
+    If $iFiles > 0 Then ReDim $aFiles[$iFiles]
+    If $iFolders > 0 Then _ArraySort($aFolders)
+    If $iFiles > 0 Then _ArraySort($aFiles)
+
+    ; ➤ Premier niveau (racine) : affichage direct sans ├──/└──
+    If $bRootLevel Then
+        For $i = 0 To $iFolders - 1
+            If $iCount >= $iMax Then ExitLoop
+            Local $sName = $aFolders[$i]
+            Local $bLast = ($i = $iFolders - 1 And $iFiles = 0)
+            Local $sSymbole = $bLast ? "└── " : "├── "
+            $sOutput &= $sSymbole & $sName & "\" & @CRLF
+            $iCount += 1
+
+            Local $sNewPrefix = $bLast ? $sPrefix & "    " : $sPrefix & "│   "
+            Local $sNewRelPath = ($sRelPath = "") ? $sName : $sRelPath & "\" & $sName
+            _TraverseAndPrint($sBasePath, $sNewRelPath, $iCount, $sOutput, $iMax, $bLast, $sNewPrefix)
+        Next
+
+        For $i = 0 To $iFiles - 1
+            If $iCount >= $iMax Then ExitLoop
+            Local $sName = $aFiles[$i]
+            Local $bLast = ($i = $iFiles - 1)
+            Local $sSymbole = $bLast ? "└── " : "├── "
+            $sOutput &= $sSymbole & $sName & @CRLF
+            $iCount += 1
+        Next
+    Else
+        ; ➤ Niveaux inférieurs : même logique, mais avec préfixe
+        For $i = 0 To $iFolders - 1
+            If $iCount >= $iMax Then ExitLoop
+            Local $sName = $aFolders[$i]
+            Local $bLast = ($i = $iFolders - 1 And $iFiles = 0)
+            Local $sSymbole = $bLast ? "└── " : "├── "
+            $sOutput &= $sPrefix & $sSymbole & $sName & "\" & @CRLF
+            $iCount += 1
+
+            Local $sNewPrefix = $bLast ? $sPrefix & "    " : $sPrefix & "│   "
+            Local $sNewRelPath = ($sRelPath = "") ? $sName : $sRelPath & "\" & $sName
+            _TraverseAndPrint($sBasePath, $sNewRelPath, $iCount, $sOutput, $iMax, $bLast, $sNewPrefix)
+        Next
+
+        For $i = 0 To $iFiles - 1
+            If $iCount >= $iMax Then ExitLoop
+            Local $sName = $aFiles[$i]
+            Local $bLast = ($i = $iFiles - 1)
+            Local $sSymbole = $bLast ? "└── " : "├── "
+            $sOutput &= $sPrefix & $sSymbole & $sName & @CRLF
+            $iCount += 1
+        Next
+    EndIf
+EndFunc
+
+; Gestion des chemins longs et UNC
+Func _NormalizePath($sPath)
+    $sPath = StringReplace($sPath, "/", "\")
+    If StringLeft($sPath, 2) = "\\" Or StringLen($sPath) > 259 Then
+        If StringLeft($sPath, 4) <> "\\?\" Then
+            $sPath = "\\?\" & $sPath
+        EndIf
+    EndIf
+    Return $sPath
+EndFunc
+#EndRegion DirTreeToString
+
+
+Func _GetRealDesktopPath()
+    ; 1. RAPIDE : Si lancé par l'élève, on ne perd pas de temps
+    If Not StringRegExp(@UserName, "(?i)^(SYSTEM|LOCAL SERVICE|NETWORK SERVICE)$") Then
+        If FileExists(@DesktopDir) And Not StringInStr(@DesktopDir, "systemprofile") Then Return @DesktopDir
+    EndIf
+
+    ; 2. REGISTRE : HKCU (parfois disponible même en service selon le mode de lancement)
+    Local $sHKCU = RegRead("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders", "Desktop")
+    If Not @error And $sHKCU <> "" And Not StringInStr($sHKCU, "systemprofile") Then
+        If FileExists($sHKCU) Then Return $sHKCU
+    EndIf
+
+    ; 3. ROBUSTE : Extraction via le propriétaire d'Explorer.exe
+    Local $iExplorerPID = ProcessExists("explorer.exe")
+    If Not $iExplorerPID Then Return ""
+
+    ; Récupération propre du dossier des profils
+    Local $sProfilesDir = RegRead("HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList", "ProfilesDirectory")
+    $sProfilesDir = StringReplace($sProfilesDir, "%SystemDrive%", StringLeft(@WindowsDir, 2))
+    $sProfilesDir = StringRegExpReplace($sProfilesDir, "\\+$", "") ; Enlever les slashs de fin
+
+    Local $sUserName = _GetProcessOwnerName($iExplorerPID)
+    If $sUserName = "" Or StringRegExp($sUserName, "(?i)SYSTEM|LOCAL SERVICE|NETWORK SERVICE") Then Return ""
+
+    Local $sUserPath = $sProfilesDir & "\" & $sUserName
+
+    ; Liste ordonnée des dossiers de bureau possibles
+    Local $aPaths[3] = [$sUserPath & "\Desktop", $sUserPath & "\OneDrive\Desktop", $sUserPath & "\Bureau"]
+    For $sP In $aPaths
+        If FileExists($sP) Then Return $sP
+    Next
+
+    Return ""
+EndFunc
+
+Func _GetProcessOwnerName($iPID)
+    Local $aResult = DllCall("kernel32.dll", "handle", "OpenProcess", "dword", 0x400, "bool", 0, "dword", $iPID)
+    If @error Or $aResult[0] = 0 Then Return ""
+    Local $hProcess = $aResult[0]
+
+    Local $aToken = DllCall("advapi32.dll", "bool", "OpenProcessToken", "handle", $hProcess, "dword", 0x8, "handle*", 0)
+    DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $hProcess)
+    If @error Or Not $aToken[0] Then Return ""
+    Local $hToken = $aToken[3]
+
+    Local $aSize = DllCall("advapi32.dll", "bool", "GetTokenInformation", "handle", $hToken, "int", 1, "ptr", 0, "dword", 0, "dword*", 0)
+    Local $tSID = DllStructCreate("byte[" & $aSize[5] & "]")
+    DllCall("advapi32.dll", "bool", "GetTokenInformation", "handle", $hToken, "int", 1, "ptr", DllStructGetPtr($tSID), "dword", $aSize[5], "dword*", 0)
+    DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $hToken)
+
+    Local $tUser = DllStructCreate("ptr", DllStructGetPtr($tSID))
+    Local $pSID = DllStructGetData($tUser, 1)
+
+    Local $aName = DllCall("advapi32.dll", "bool", "LookupAccountSidW", "ptr", 0, "ptr", $pSID, "wstr", "", "dword*", 256, "wstr", "", "dword*", 256, "int*", 0)
+    If @error Or Not $aName[0] Then Return ""
+
+    Return $aName[3] ; Nom d'utilisateur
+EndFunc
+
