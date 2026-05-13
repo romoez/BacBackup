@@ -13,7 +13,8 @@ Global Const $MINIMUM_WINDOWS_FREE_SPACE = 15000 ; en MB
 Global Const $FREE_SPACE_DRIVE_BACKUP = 5000 ; en MB
 ; Cache global pour les installations XAMPP-LITE/XAMPP/WAMP
 Global $__g_aEasyPHPRootsCache = 0
-
+; Mutex
+Global $g_hSingletonMutex = 0
 ; ============================================================================
 Func DossiersBac($FullPath = 1) ; 1:Chemins complets, 0:Chemins relatifs
     Local $aResult = _FileListToArray( _
@@ -886,3 +887,123 @@ Func _GetProcessOwnerName($iPID)
     Return $aName[3] ; Nom d'utilisateur
 EndFunc
 
+Func _AcquireGlobalMutex($sName = "Global\BacBackup_Singleton_Mutex")
+    Local $aRet = DllCall("kernel32.dll", "handle", "CreateMutexW", _
+            "ptr", 0, _          ; lpMutexAttributes
+            "bool", False, _     ; bInitialOwner
+            "wstr", $sName)      ; lpName
+
+    If @error Or Not IsArray($aRet) Then Return 0
+
+    Local $hMutex = $aRet[0]
+    Local $aErr = DllCall("kernel32.dll", "dword", "GetLastError")
+    Local $iErr = (IsArray($aErr) ? $aErr[0] : 0)
+
+    If $iErr = 183 Then ; ERROR_ALREADY_EXISTS
+        DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $hMutex)
+        Return 0
+    EndIf
+
+    $g_hSingletonMutex = $hMutex
+    Return $hMutex
+EndFunc   ;==>_AcquireGlobalMutex
+
+
+Func _ReleaseGlobalMutex()
+    If $g_hSingletonMutex Then
+        DllCall("kernel32.dll", "bool", "ReleaseMutex", "handle", $g_hSingletonMutex)
+        DllCall("kernel32.dll", "bool", "CloseHandle", "handle", $g_hSingletonMutex)
+        $g_hSingletonMutex = 0
+    EndIf
+EndFunc   ;==>_ReleaseGlobalMutex
+
+
+; -----------------------------------------------------------------------------
+; _CreateTrayIconManually : recrée l'icône tray supprimée par #NoTrayIcon
+;
+; Avec #NoTrayIcon, AutoIt ne crée plus d'icône au démarrage. Mais on en a
+; besoin pour le double-clic d'ouverture de l'interface. Cette fonction
+; ajoute l'icône à la zone de notification une fois qu'on est prêt
+; (donc après l'acquisition du mutex).
+; -----------------------------------------------------------------------------
+Func _CreateTrayIconManually()
+    Opt("TrayIconHide", 0)
+    TraySetIcon(@ScriptFullPath, -1) ; utilise l'icône embarquée du .exe
+EndFunc   ;==>_CreateTrayIconManually
+
+
+
+
+Func _SafeDirRemove($sPath, $iRetries = 2, $iDelayMS = 500)
+    If Not FileExists($sPath) Then Return 1
+	If DirRemove($sPath, 1) Then Return 1
+    ; Étape 1 : neutraliser les attributs gênants en profondeur
+    FileSetAttrib($sPath & "\*.*", "-RSHA", 1) ; ReadOnly, System, Hidden, Archive
+    FileSetAttrib($sPath, "-RSH")
+
+    ; Étape 2 : tenter la suppression avec retry
+    For $i = 1 To $iRetries
+        If DirRemove($sPath, 1) Then
+            Return 1
+        EndIf
+        Sleep($iDelayMS)
+    Next
+
+    ; Étape 3 : échec → tentative ultime via icacls /reset /T puis DirRemove
+    Local $sIcacls = @SystemDir & "\icacls.exe"
+    Local $iPID = Run('"' & $sIcacls & '" "' & $sPath & '" /reset /T /C /Q', "", @SW_HIDE)
+    If Not @error Then ProcessWaitClose($iPID)
+
+    If DirRemove($sPath, 1) Then Return 1
+
+    _LogBacBackup("⚠ Impossible de supprimer après " & $iRetries & " tentatives : " & $sPath)
+    Return 0
+EndFunc   ;==>_SafeDirRemove
+
+
+; -----------------------------------------------------------------------------
+; _DriveFreeSpaceMB : retourne l'espace libre en Mo, ou -1 si indisponible
+; -----------------------------------------------------------------------------
+Func _DriveFreeSpaceMB($sDrive)
+    If StringLen($sDrive) < 2 Then Return -1
+    Local $iMB = DriveSpaceFree(StringLeft($sDrive, 2) & "\")
+    If @error Or $iMB = "" Then Return -1
+    Return $iMB
+EndFunc   ;==>_DriveFreeSpaceMB
+
+
+; -----------------------------------------------------------------------------
+; _IsDiskCritical : true si l'espace libre < seuil (en Mo)
+; Par défaut : 2048 Mo (2 Go) — au-dessous, Windows commence à pleurer
+; -----------------------------------------------------------------------------
+Func _IsDiskCritical($sDrive, $iThresholdMB = 2048)
+    Local $iFree = _DriveFreeSpaceMB($sDrive)
+    If $iFree < 0 Then Return False
+    Return ($iFree < $iThresholdMB)
+EndFunc   ;==>_IsDiskCritical
+
+
+; -----------------------------------------------------------------------------
+; _LogBacBackup : journal centralisé (texte horodaté, rotation à 2 Mo)
+; Écrit dans <LecteurSauvegarde>\Sauvegardes\BacBackup\Journal_BacBackup.log
+; -----------------------------------------------------------------------------
+Func _LogBacBackup($sMessage)
+    Local $sDrive = LecteurSauvegarde()
+    Local $sLogDir = $sDrive & "Sauvegardes\BacBackup"
+    Local $sLogFile = $sLogDir & "\Journal_BacBackup.log"
+
+    If Not FileExists($sLogDir) Then Return ; pas encore initialisé
+
+    ; Rotation simple si > 2 Mo
+    If FileExists($sLogFile) And FileGetSize($sLogFile) > 2 * 1024 * 1024 Then
+        FileMove($sLogFile, $sLogFile & ".old", 1)
+    EndIf
+
+    Local $sTime = @YEAR & "-" & StringFormat("%02d", @MON) & "-" & StringFormat("%02d", @MDAY) & _
+            " " & StringFormat("%02d", @HOUR) & ":" & StringFormat("%02d", @MIN) & ":" & StringFormat("%02d", @SEC)
+
+    Local $hFile = FileOpen($sLogFile, $FO_APPEND + $FO_UTF8_NOBOM)
+    If $hFile = -1 Then Return
+    FileWriteLine($hFile, "[" & $sTime & "] " & $sMessage)
+    FileClose($hFile)
+EndFunc   ;==>_LogBacBackup

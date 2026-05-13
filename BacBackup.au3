@@ -1,4 +1,4 @@
-;~ #NoTrayIcon
+#NoTrayIcon
 #Region ;**** Directives AutoIt3Wrapper ****
 #AutoIt3Wrapper_Run_Au3Stripper=y
 ;~ #Au3Stripper_Parameters=/rm /mo /sf /sv
@@ -9,8 +9,8 @@
 #Region ;**** Métadonnées de l'application ****
 #pragma compile(Icon, BacBackup.ico)
 #pragma compile(FileDescription, BacBackup - Service de surveillance)
-#pragma compile(FileVersion, 2.5.26.218)
-#pragma compile(ProductVersion, 2.5.26.218)
+#pragma compile(FileVersion, 3.0.26.513)
+#pragma compile(ProductVersion, 3.0.26.513)
 #pragma compile(ProductName, BacBackup)
 #pragma compile(InternalName, BacBackup)
 #pragma compile(OriginalFilename, BacBackup.exe)
@@ -98,14 +98,17 @@ HotKeySet("^#+{F5}", "LancerSauvegardeForcee") ; CTRL+SHIFT+WIN+F5
 ;@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 OnAutoItExitRegister("_NettoyerRessources")
-_KillOtherScript()
+If Not _AcquireGlobalMutex() Then
+	Exit 0
+EndIf
+_CreateTrayIconManually()
+
 Initialisation()
 CleanUp()
 InitialiserSurveillancePressePapier()
-Opt("TrayOnEventMode", 1) ; Active le mode événement pour l'icône (ne bloque pas le script)
-Opt("TrayMenuMode", 1)    ; Désactive le menu par défaut (Pause/Exit) au clic droit
-TraySetToolTip("BacBackup - Surveillance active") ; Texte au survol de la souris
-; Associe le double-clic gauche à la fonction de gestion
+Opt("TrayOnEventMode", 1)
+Opt("TrayMenuMode", 1)
+TraySetToolTip("BacBackup - Surveillance active")
 TraySetOnEvent($TRAY_EVENT_PRIMARYDOUBLE, "_GestionDoubleClicTray")
 main()
 
@@ -654,77 +657,161 @@ EndFunc   ;==>OuvrirDossierDeSauvegarde
 ;#########################################################################################
 
 Func CleanUp()
-	Local Const $NombreMaxDeDossiersDeSauve_Seuil_Minimum = 20
-	Local Const $NombreMaxDeDossiersDeSauve_Default_Value = 100
-	Local Const $NombreMaxDeDossiersDeSauve_Seuil_Maximum = 500
+    Local Const $NombreMaxDeDossiersDeSauve_Seuil_Minimum = 20
+    Local Const $NombreMaxDeDossiersDeSauve_Default_Value = 100
+    Local Const $NombreMaxDeDossiersDeSauve_Seuil_Maximum = 500
 
-	Local Const $TailleMaxDuDossierBacBackupEnGigaoctet_Seuil_Minimum = 10 ; Go
-	Local Const $TailleMaxDuDossierBacBackupEnGigaoctet_Default_Value = 50 ; Go
-	Local Const $TailleMaxDuDossierBacBackupEnGigaoctet_Seuil_Maximum = 200 ; Go
+    Local Const $TailleMaxDuDossierBacBackupEnGigaoctet_Seuil_Minimum = 10 ; Go
+    Local Const $TailleMaxDuDossierBacBackupEnGigaoctet_Default_Value = 50 ; Go
+    Local Const $TailleMaxDuDossierBacBackupEnGigaoctet_Seuil_Maximum = 200 ; Go
 
-	Local $TailleMaxDuDossierBacBackupEnGigaoctet = IniRead(StringRegExpReplace($DossierSession, "(\\[^\\]*)$", "") & "\BacBackup.ini", "Params", "TailleMaxDuDossierBacBackupEnGigaoctet", "0")
-	If StringIsInt($TailleMaxDuDossierBacBackupEnGigaoctet) = 0 Or $TailleMaxDuDossierBacBackupEnGigaoctet < $TailleMaxDuDossierBacBackupEnGigaoctet_Seuil_Minimum Or $TailleMaxDuDossierBacBackupEnGigaoctet > $TailleMaxDuDossierBacBackupEnGigaoctet_Seuil_Maximum Then
-		$TailleMaxDuDossierBacBackupEnGigaoctet = $TailleMaxDuDossierBacBackupEnGigaoctet_Default_Value
-		IniWrite(StringRegExpReplace($DossierSession, "(\\[^\\]*)$", "") & "\BacBackup.ini", "Params", "TailleMaxDuDossierBacBackupEnGigaoctet", $TailleMaxDuDossierBacBackupEnGigaoctet)
-	EndIf
+    ; Seuil "disque critique" : si l'espace libre tombe sous ce seuil,
+    ; on déclenche un nettoyage agressif quel que soit le compte de sessions.
+    Local Const $iDisqueCritique_MB = 3072 ; 3 Go
 
-	$NombreMaxDeDossiersDeSauve = IniRead(StringRegExpReplace($DossierSession, "(\\[^\\]*)$", "") & "\BacBackup.ini", "Params", "NombreMaxDeDossiersDeSauve", "0")
-	If StringIsInt($NombreMaxDeDossiersDeSauve) = 0 Or $NombreMaxDeDossiersDeSauve < $NombreMaxDeDossiersDeSauve_Seuil_Minimum Or $NombreMaxDeDossiersDeSauve > $NombreMaxDeDossiersDeSauve_Seuil_Maximum Then
-		$NombreMaxDeDossiersDeSauve = $NombreMaxDeDossiersDeSauve_Default_Value
-		IniWrite(StringRegExpReplace($DossierSession, "(\\[^\\]*)$", "") & "\BacBackup.ini", "Params", "NombreMaxDeDossiersDeSauve", $NombreMaxDeDossiersDeSauve)
-	EndIf
-	Local $sDrive
-	Local $aDrives = DriveGetDrive('FIXED')
-	For $i = 1 To $aDrives[0]
-		If (DriveGetType($aDrives[$i], $DT_BUSTYPE) <> "USB") And _WinAPI_IsWritable($aDrives[$i]) Then
-			$sDrive = $aDrives[$i]
-			$Chemin = $sDrive & "\Sauvegardes"
-			If Not FileExists($Chemin & "\BacBackup") Then ContinueLoop
+    ; Le dossier de session courant ne doit JAMAIS être supprimé
+    Local $sCurrentSession = $DossierSession ; chemin complet
 
-			If FileExists($Chemin & "\BacBackup\BacBackup.ini") Then
-				Local $aDossiersEtNumeros = IniReadSection($Chemin & "\BacBackup\BacBackup.ini", "DerniersDossiers")
-				If Not @error And IsArray($aDossiersEtNumeros) Then
-					Local $k = 1
-					While $k <= $aDossiersEtNumeros[0][0]
-						Local $KesDossier = $aDossiersEtNumeros[$k][0]
-						If Not FileExists($Chemin & "\Tmp\" & $KesDossier) Then
-							_ArrayDelete($aDossiersEtNumeros, $k)
-							$aDossiersEtNumeros[0][0] -= 1
-							ContinueLoop
-						EndIf
-						If Not FileExists($Chemin & "\Tmp\" & $KesDossier & "\dossier d'origine.lnk") Then
-							DirRemove($Chemin & "\Tmp\" & $KesDossier, 1)
-							_ArrayDelete($aDossiersEtNumeros, $k)
-							$aDossiersEtNumeros[0][0] -= 1
-							ContinueLoop
-						EndIf
-						Local $aDetails = FileGetShortcut($Chemin & "\Tmp\" & $KesDossier & "\dossier d'origine.lnk")
-						If @error Or Not FileExists($aDetails[0]) Then
-							DirRemove($Chemin & "\Tmp\" & $KesDossier, 1)
-							_ArrayDelete($aDossiersEtNumeros, $k)
-							$aDossiersEtNumeros[0][0] -= 1
-							ContinueLoop
-						EndIf
-						$aDossiersEtNumeros[$k][1] = "000"
-						$k += 1
-					WEnd
-					_ArraySort($aDossiersEtNumeros, 0, 1)
-					IniWriteSection($Chemin & "\BacBackup\BacBackup.ini", "DerniersDossiers", $aDossiersEtNumeros)
-				EndIf
-			EndIf
+    ; Lecture des paramètres (avec auto-correction si invalides)
+    Local $sIniRoot = StringRegExpReplace($DossierSession, "(\\[^\\]*)$", "")
+    Local $sIniFile = $sIniRoot & "\BacBackup.ini"
 
-			Local $DossiersSessions = _FileListToArrayRec($Chemin & "\BacBackup", "*", 2, 0, 2, 2)
-			If IsArray($DossiersSessions) And ($DossiersSessions[0] > $NombreMaxDeDossiersDeSauve _
-					Or Round(DirGetSize($Chemin & "\BacBackup\") / 1024 / 1024 / 1024) > $TailleMaxDuDossierBacBackupEnGigaoctet) Then
-				_UnlockFolder($Chemin & "\BacBackup")
-				For $j = Round($DossiersSessions[0] / 2) To 1 Step -1
-					DirRemove($DossiersSessions[$j], 1)
-				Next
-				_LockFolderContents($Chemin & "\BacBackup")
-			EndIf
-		EndIf
-	Next
+    Local $TailleMaxGB = IniRead($sIniFile, "Params", "TailleMaxDuDossierBacBackupEnGigaoctet", "0")
+    If StringIsInt($TailleMaxGB) = 0 Or $TailleMaxGB < $TailleMaxDuDossierBacBackupEnGigaoctet_Seuil_Minimum _
+            Or $TailleMaxGB > $TailleMaxDuDossierBacBackupEnGigaoctet_Seuil_Maximum Then
+        $TailleMaxGB = $TailleMaxDuDossierBacBackupEnGigaoctet_Default_Value
+        IniWrite($sIniFile, "Params", "TailleMaxDuDossierBacBackupEnGigaoctet", $TailleMaxGB)
+    EndIf
+
+    Local $NombreMax = IniRead($sIniFile, "Params", "NombreMaxDeDossiersDeSauve", "0")
+    If StringIsInt($NombreMax) = 0 Or $NombreMax < $NombreMaxDeDossiersDeSauve_Seuil_Minimum _
+            Or $NombreMax > $NombreMaxDeDossiersDeSauve_Seuil_Maximum Then
+        $NombreMax = $NombreMaxDeDossiersDeSauve_Default_Value
+        IniWrite($sIniFile, "Params", "NombreMaxDeDossiersDeSauve", $NombreMax)
+    EndIf
+
+    ; ─── BOUCLE SUR TOUS LES LECTEURS FIXES ─────────────────────────────────
+    ; CORRECTION D : on inclut TOUS les lecteurs fixes même non-inscriptibles
+    ; pour pouvoir au moins lire et nettoyer les anciennes sessions résiduelles.
+    Local $aDrives = DriveGetDrive('FIXED')
+    If Not IsArray($aDrives) Then Return
+
+    For $i = 1 To $aDrives[0]
+        If DriveGetType($aDrives[$i], $DT_BUSTYPE) = "USB" Then ContinueLoop
+
+        Local $sDrive = $aDrives[$i]
+        Local $sChemin = $sDrive & "\Sauvegardes"
+        Local $sBacBackup = $sChemin & "\BacBackup"
+
+        If Not FileExists($sBacBackup) Then ContinueLoop
+
+        ; ── Tâche 1 : nettoyage Tmp orphelins (inchangé fonctionnellement) ──
+        If FileExists($sChemin & "\BacBackup\BacBackup.ini") Then
+            _NettoyerTmpOrphelins($sChemin)
+        EndIf
+
+        ; ── Tâche 2 : ce lecteur est-il inscriptible ? ────────────────────
+        ; Si non, on ne peut pas supprimer (manque de permissions probable)
+        ; mais on log la situation pour visibilité.
+        If Not _WinAPI_IsWritable($sDrive) Then
+            _LogBacBackup("ℹ Lecteur " & $sDrive & " non inscriptible, nettoyage différé")
+            ContinueLoop
+        EndIf
+
+        ; ── Tâche 3 : décision de nettoyage ───────────────────────────────
+        Local $aDossiersSessions = _FileListToArrayRec($sBacBackup, "*", 2, 0, 2, 2)
+        If Not IsArray($aDossiersSessions) Then ContinueLoop
+
+        Local $iNbSessions = $aDossiersSessions[0]
+        Local $iTailleGB = Round(DirGetSize($sBacBackup) / 1024 / 1024 / 1024, 2)
+        Local $bDisqueCritique = _IsDiskCritical($sDrive, $iDisqueCritique_MB)
+
+        Local $bDoCleanup = ($iNbSessions > $NombreMax) _
+                Or ($iTailleGB > $TailleMaxGB) _
+                Or $bDisqueCritique
+
+        If Not $bDoCleanup Then ContinueLoop
+
+        ; ── Tâche 4 : combien supprimer ? ─────────────────────────────────
+        ; CORRECTION C : si disque critique, on supprime plus agressivement
+        Local $iASupprimer
+        If $bDisqueCritique Then
+            $iASupprimer = Round($iNbSessions * 0.66) ; 2/3 des plus anciennes
+            _LogBacBackup("⚠ Disque " & $sDrive & " critique (libre < " & $iDisqueCritique_MB _
+                    & " Mo), nettoyage agressif : " & $iASupprimer & " sessions")
+        Else
+            $iASupprimer = Round($iNbSessions / 2) ; comportement d'origine
+            _LogBacBackup("→ Cleanup standard sur " & $sDrive & " : " & $iASupprimer & "/" & $iNbSessions _
+                    & " sessions (taille = " & $iTailleGB & " Go)")
+        EndIf
+
+        ; ── Tâche 5 : DÉVERROUILLER RÉCURSIVEMENT (CORRECTION A) ──────────
+        _UnlockFolder($sBacBackup, True)
+
+        ; ── Tâche 6 : suppression robuste (CORRECTION B + E) ──────────────
+        Local $iSuccess = 0, $iFailed = 0
+        For $j = $iASupprimer To 1 Step -1
+            Local $sToRemove = $aDossiersSessions[$j]
+
+            ; CORRECTION E : ne JAMAIS supprimer le dossier courant
+            If $sToRemove = $sCurrentSession Then
+                _LogBacBackup("⛔ Skip session courante : " & $sToRemove)
+                ContinueLoop
+            EndIf
+
+            If _SafeDirRemove($sToRemove) Then
+                $iSuccess += 1
+            Else
+                $iFailed += 1
+            EndIf
+        Next
+
+        _LogBacBackup("✓ Cleanup " & $sDrive & " : " & $iSuccess & " supprimées, " & $iFailed & " échecs")
+
+        ; ── Tâche 7 : reverrouiller ───────────────────────────────────────
+        _LockFolderContents($sBacBackup)
+    Next
 EndFunc   ;==>CleanUp
+
+; ─── Helper extrait pour clarté : nettoyage des Tmp orphelins ──────────────
+Func _NettoyerTmpOrphelins($sChemin)
+    Local $sIni = $sChemin & "\BacBackup\BacBackup.ini"
+    Local $aDossiersEtNumeros = IniReadSection($sIni, "DerniersDossiers")
+    If @error Or Not IsArray($aDossiersEtNumeros) Then Return
+
+    Local $k = 1
+    While $k <= $aDossiersEtNumeros[0][0]
+        Local $sNom = $aDossiersEtNumeros[$k][0]
+        Local $sTmpPath = $sChemin & "\Tmp\" & $sNom
+
+        If Not FileExists($sTmpPath) Then
+            _ArrayDelete($aDossiersEtNumeros, $k)
+            $aDossiersEtNumeros[0][0] -= 1
+            ContinueLoop
+        EndIf
+
+        If Not FileExists($sTmpPath & "\dossier d'origine.lnk") Then
+            _SafeDirRemove($sTmpPath)
+            _ArrayDelete($aDossiersEtNumeros, $k)
+            $aDossiersEtNumeros[0][0] -= 1
+            ContinueLoop
+        EndIf
+
+        Local $aDetails = FileGetShortcut($sTmpPath & "\dossier d'origine.lnk")
+        If @error Or Not FileExists($aDetails[0]) Then
+            _SafeDirRemove($sTmpPath)
+            _ArrayDelete($aDossiersEtNumeros, $k)
+            $aDossiersEtNumeros[0][0] -= 1
+            ContinueLoop
+        EndIf
+
+        $aDossiersEtNumeros[$k][1] = "000"
+        $k += 1
+    WEnd
+
+    _ArraySort($aDossiersEtNumeros, 0, 1)
+    IniWriteSection($sIni, "DerniersDossiers", $aDossiersEtNumeros)
+EndFunc   ;==>_NettoyerTmpOrphelins
 
 ;#########################################################################################
 ;#########################################################################################

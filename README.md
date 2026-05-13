@@ -14,7 +14,7 @@
 
 ### Interface de BacBackup
 
-![Interface BacBackup](captures_ecran\bb_interface_liste_de_dodssiers_surveilles.png)  
+![Interface BacBackup](captures_ecran/bacbackup_tableau_de_bord.png)  
 _Interface principale de BacBackup_
 
 ---
@@ -112,7 +112,7 @@ Ces combinaisons permettent d'agir instantanément, même si l'interface n'est p
 
 ## Description des Éléments dans un Dossier de Session BacBackup
 
-![Contenu d'un dossier de session](captures_ecran\dossier_de_sauvegarde_par_session.png)  
+![Contenu d'un dossier de session](captures_ecran/dossier_de_sauvegarde_par_session.png)  
 _Structure d'un dossier de session BacBackup_
 
 ### a. Dossier_CapturesEcran
@@ -193,7 +193,7 @@ Ces fichiers sont stockés dans le répertoire verrouillé `C:\Sauvegardes\BacBa
 
 ## Paramètres
 
-![Paramètres de BacBackup](captures_ecran\bb_interface_parametres.png)  
+![Paramètres de BacBackup](captures_ecran/bacbackup_parametres.png)  
 _Interface des paramètres - Les valeurs sont consultables mais modifiables uniquement via le fichier `BacBackup.ini`_
 
 **Note** : Les options sont configurables uniquement en modifiant manuellement le fichier `BacBackup.ini`. Cette interface permet uniquement de visualiser les valeurs actuelles.
@@ -208,4 +208,3 @@ Ce projet est sous licence [GPL-3.0](LICENSE).
 
 - [Téléchargements](https://github.com/romoez/BacBackup/releases)
 - [BacCollector](https://github.com/romoez/BacCollector) - Outil de collecte complémentaire
-- [Signaler un bug](https://github.com/romoez/BacBackup/issues)

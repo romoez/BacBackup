@@ -9,8 +9,8 @@
 #Region ;**** Métadonnées de l'application ****
 #pragma compile(Icon, BacBackup.ico)
 #pragma compile(FileDescription, BacBackup - Agent de sauvegarde)
-#pragma compile(FileVersion, 2.5.26.218)
-#pragma compile(ProductVersion, 2.5.26.218)
+#pragma compile(FileVersion, 3.0.26.513)
+#pragma compile(ProductVersion, 3.0.26.513)
 #pragma compile(ProductName, BacBackup)
 #pragma compile(InternalName, BacBackup_Sauvegarder)
 #pragma compile(OriginalFilename, BacBackup_Sauvegarder.exe)
