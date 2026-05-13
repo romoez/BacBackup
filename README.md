@@ -194,9 +194,7 @@ Ces fichiers sont stockés dans le répertoire verrouillé `C:\Sauvegardes\BacBa
 ## Paramètres
 
 ![Paramètres de BacBackup](captures_ecran/bacbackup_parametres.png)  
-_Interface des paramètres - Les valeurs sont consultables mais modifiables uniquement via le fichier `BacBackup.ini`_
-
-**Note** : Les options sont configurables uniquement en modifiant manuellement le fichier `BacBackup.ini`. Cette interface permet uniquement de visualiser les valeurs actuelles.
+_Interface des paramètres_
 
 ---
 
